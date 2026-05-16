@@ -96,7 +96,11 @@ class _StepTestWorker(QThread):
                 ],
             )
 
-            config = ExecutorConfig(max_iterations=15, use_vision=False)
+            config = ExecutorConfig(
+                max_iterations=15,
+                use_vision=False,
+                skip_clean_start=True,  # teach mode — don't reset between steps
+            )
             watchers = WatcherManager(self._device.d)
             executor = Executor(
                 device=self._device,

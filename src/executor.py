@@ -326,6 +326,7 @@ class ExecutorConfig:
     history_window: int = 6            # recent actions sent to the LLM
     max_elements_in_prompt: int = 70
     use_vision: bool = False           # send screenshot to LLM (user toggle)
+    skip_clean_start: bool = False     # skip Step 0 home+force-stop (for teach-mode)
 
 
 # --------------------------------------------------------------------------- #
@@ -385,18 +386,20 @@ class Executor:
         # --- STEP 0: CLEAN STATE ---
         # Always start from home launcher with related apps force-stopped.
         # This ensures both normal and macro-replay runs start identically.
-        try:
-            related_pkgs = self._extract_related_packages(plan)
-            if related_pkgs:
-                self.on_log(
-                    f"▸ Step 0: Resetting to home & force-stopping "
-                    f"{len(related_pkgs)} related app(s): {', '.join(related_pkgs)}"
-                )
-            else:
-                self.on_log("▸ Step 0: Resetting to home launcher.")
-            self.device.go_home_and_clean(related_pkgs)
-        except Exception as exc:
-            self.on_log(f"⚠ Clean-start failed (continuing anyway): {exc}")
+        # Skipped when testing individual steps in Teach mode.
+        if not self.config.skip_clean_start:
+            try:
+                related_pkgs = self._extract_related_packages(plan)
+                if related_pkgs:
+                    self.on_log(
+                        f"▸ Step 0: Resetting to home & force-stopping "
+                        f"{len(related_pkgs)} related app(s): {', '.join(related_pkgs)}"
+                    )
+                else:
+                    self.on_log("▸ Step 0: Resetting to home launcher.")
+                self.device.go_home_and_clean(related_pkgs)
+            except Exception as exc:
+                self.on_log(f"⚠ Clean-start failed (continuing anyway): {exc}")
 
         self.watchers.start()
         try:
