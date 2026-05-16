@@ -345,7 +345,7 @@ class TeachTab(QWidget):
             # Test button (we use a QPushButton embedded in the cell)
             test_btn = QPushButton("▶ Test")
             test_btn.setFixedWidth(70)
-            test_btn.clicked.connect(lambda checked, r=row: self._on_test_step(r))
+            test_btn.clicked.connect(lambda _checked=False, r=row: self._on_test_step(r))
             self.step_table.setCellWidget(row, 3, test_btn)
 
             # Verify checkbox button
@@ -353,7 +353,7 @@ class TeachTab(QWidget):
                 verify_btn = QPushButton("✓")
                 verify_btn.setFixedWidth(40)
                 verify_btn.setStyleSheet("background: #1f8a3a; color: white; font-weight: bold;")
-                verify_btn.clicked.connect(lambda checked, r=row: self._on_verify_step(r))
+                verify_btn.clicked.connect(lambda _checked=False, r=row: self._on_verify_step(r))
                 self.step_table.setCellWidget(row, 4, verify_btn)
             elif step.verified:
                 check_label = QLabel("✓")
