@@ -203,6 +203,15 @@ class LLMClient:
 
             except Exception as exc:
                 last_error = exc
+                exc_str = str(exc)
+                if "image_url" in exc_str or "variant" in exc_str:
+                    log.warning(
+                        "Model %s does not support vision (image_url). Falling back to text-only.",
+                        self.config.model
+                    )
+                    image_base64 = None
+                    continue  # retry immediately without image
+                
                 log.warning(
                     "Unexpected LLM error (attempt %d/%d): %s",
                     attempt, self.config.max_retries, exc,

@@ -500,6 +500,13 @@ class Executor:
             img = self.device.d.screenshot()
             import io
             import base64
+            import os
+            
+            # Save for GUI live view
+            os.makedirs("ui_dumps", exist_ok=True)
+            img.save("ui_dumps/current.png")
+            self.on_log("Captured screenshot: ui_dumps/current.png")
+            
             buffered = io.BytesIO()
             img.save(buffered, format="PNG")
             image_base64 = base64.b64encode(buffered.getvalue()).decode()

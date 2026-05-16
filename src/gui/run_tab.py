@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -150,7 +150,22 @@ class RunTab(QWidget):
         log_layout.addWidget(self.log_view, stretch=1)
         splitter.addWidget(log_box)
 
-        splitter.setSizes([520, 520])
+        # screenshot view
+        img_box = QWidget()
+        img_layout = QVBoxLayout(img_box)
+        img_layout.setContentsMargins(0, 0, 0, 0)
+        img_layout.setSpacing(6)
+        img_label = QLabel("Live screenshot")
+        img_label.setObjectName("h2")
+        img_layout.addWidget(img_label)
+        
+        self.screenshot_label = QLabel("No screenshot yet")
+        self.screenshot_label.setAlignment(Qt.AlignCenter)
+        self.screenshot_label.setStyleSheet("border: 1px solid #2c2d3a; background: #14151c; border-radius: 6px;")
+        img_layout.addWidget(self.screenshot_label, stretch=1)
+        splitter.addWidget(img_box)
+
+        splitter.setSizes([340, 340, 340])
         layout.addWidget(splitter, stretch=1)
 
         # --- footer: results summary ---
@@ -252,6 +267,19 @@ class RunTab(QWidget):
         sb = self.log_view.verticalScrollBar()
         sb.setValue(sb.maximum())
         self.log.emit(msg)
+        
+        # Live screenshot update
+        if "Captured screenshot: " in msg:
+            path = msg.split("Captured screenshot: ")[1].strip()
+            pixmap = QPixmap(path)
+            if not pixmap.isNull():
+                # Scale to fit label while maintaining aspect ratio
+                scaled = pixmap.scaled(
+                    self.screenshot_label.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                self.screenshot_label.setPixmap(scaled)
 
     def _on_stop(self) -> None:
         if self._worker is not None and self._worker.isRunning():
