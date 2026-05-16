@@ -10,10 +10,11 @@ Users can:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -40,6 +41,85 @@ from .style import STATUS_COLORS
 _STEP_HEADERS = ("#", "Instruction", "Status", "Test", "✓")
 
 
+# --------------------------------------------------------------------------- #
+# Background worker for step testing
+# --------------------------------------------------------------------------- #
+
+class _StepTestWorker(QThread):
+    """Run a single taught-step through the Executor on a background thread."""
+
+    log_message = Signal(str)
+    finished_ok = Signal()          # step passed
+    finished_fail = Signal(str)     # step failed (reason)
+
+    def __init__(
+        self,
+        device: DeviceManager,
+        llm: LLMClient,
+        instruction: str,
+        task_notes: str,
+        do_home_first: bool,
+    ) -> None:
+        super().__init__()
+        self._device = device
+        self._llm = llm
+        self._instruction = instruction
+        self._task_notes = task_notes
+        self._do_home_first = do_home_first
+
+    def run(self) -> None:
+        from ..planner import Plan, PlanStep
+        from ..executor import Executor, ExecutorConfig
+        from ..watchers import WatcherManager
+
+        try:
+            self.log_message.emit(
+                f"Using model: {self._llm.config.provider} / {self._llm.config.model}"
+            )
+
+            if self._do_home_first:
+                self.log_message.emit("→ Step 1: going home + clean state…")
+                self._device.go_home_and_clean()
+                self.log_message.emit("  Home + clean done.")
+
+            plan = Plan(
+                goal=f"Execute this single instruction: {self._instruction}",
+                task_notes=self._task_notes or "None",
+                steps=[
+                    PlanStep(
+                        step_id=1,
+                        action_description=self._instruction,
+                        expected_outcome="The instruction is completed successfully",
+                        is_optional=False,
+                        status="pending",
+                    )
+                ],
+            )
+
+            config = ExecutorConfig(max_iterations=15, use_vision=False)
+            watchers = WatcherManager(self._device.d)
+            executor = Executor(
+                device=self._device,
+                llm=self._llm,
+                watchers=watchers,
+                config=config,
+                on_log=lambda msg: self.log_message.emit(msg),
+            )
+
+            results = executor.run(plan)
+            if results and results[0].success:
+                self.finished_ok.emit()
+            else:
+                note = results[0].note if results else "unknown error"
+                self.finished_fail.emit(note)
+        except Exception as exc:
+            self.finished_fail.emit(str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# Teach Tab
+# --------------------------------------------------------------------------- #
+
 class TeachTab(QWidget):
     task_saved = Signal(object)        # TaughtTask
     run_taught_task = Signal(object)   # TaughtTask — request to run it
@@ -51,7 +131,8 @@ class TeachTab(QWidget):
         self._llm: Optional[LLMClient] = None
         self._library = TaughtTaskLibrary()
         self._current_task: Optional[TaughtTask] = None
-        self._testing_step: Optional[int] = None  # index being tested
+        self._test_worker: Optional[_StepTestWorker] = None
+        self._testing_row: int = -1
         self._build()
         self._refresh_saved_list()
 
@@ -227,7 +308,7 @@ class TeachTab(QWidget):
         right_layout.addWidget(QLabel("Test Log:"))
         self.test_log = QPlainTextEdit()
         self.test_log.setReadOnly(True)
-        self.test_log.setMaximumHeight(100)
+        self.test_log.setMaximumHeight(160)
         right_layout.addWidget(self.test_log)
 
         splitter.addWidget(right)
@@ -306,6 +387,8 @@ class TeachTab(QWidget):
     # ---- Step management ------------------------------------------------ #
 
     def _render_steps(self) -> None:
+        is_testing = self._test_worker is not None and self._test_worker.isRunning()
+
         if self._current_task is None:
             self.step_table.setRowCount(0)
             return
@@ -324,7 +407,10 @@ class TeachTab(QWidget):
             self.step_table.setItem(row, 1, instr_item)
 
             # Status
-            if step.verified:
+            if is_testing and row == self._testing_row:
+                status_text = "⏳ Testing…"
+                bg, fg = STATUS_COLORS["running"]
+            elif step.verified:
                 status_text = "✓ Verified"
                 bg, fg = STATUS_COLORS["done"]
             elif step.last_result == "success":
@@ -342,10 +428,14 @@ class TeachTab(QWidget):
             status_item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
             self.step_table.setItem(row, 2, status_item)
 
-            # Test button (we use a QPushButton embedded in the cell)
+            # Test button
             test_btn = QPushButton("▶ Test")
             test_btn.setFixedWidth(70)
-            test_btn.clicked.connect(lambda _checked=False, r=row: self._on_test_step(r))
+            if is_testing:
+                test_btn.setEnabled(False)
+                if row == self._testing_row:
+                    test_btn.setText("⏳")
+            test_btn.clicked.connect(lambda _c=False, r=row: self._on_test_step(r))
             self.step_table.setCellWidget(row, 3, test_btn)
 
             # Verify checkbox button
@@ -353,7 +443,7 @@ class TeachTab(QWidget):
                 verify_btn = QPushButton("✓")
                 verify_btn.setFixedWidth(40)
                 verify_btn.setStyleSheet("background: #1f8a3a; color: white; font-weight: bold;")
-                verify_btn.clicked.connect(lambda _checked=False, r=row: self._on_verify_step(r))
+                verify_btn.clicked.connect(lambda _c=False, r=row: self._on_verify_step(r))
                 self.step_table.setCellWidget(row, 4, verify_btn)
             elif step.verified:
                 check_label = QLabel("✓")
@@ -406,9 +496,14 @@ class TeachTab(QWidget):
             self._current_task.steps[row].last_result = ""
             self._render_steps()
 
-    # ---- Testing steps -------------------------------------------------- #
+    # ---- Testing steps (background thread) ------------------------------ #
 
     def _on_test_step(self, row: int) -> None:
+        if self._test_worker is not None and self._test_worker.isRunning():
+            QMessageBox.information(
+                self, "Busy", "A test is already running. Wait for it to finish."
+            )
+            return
         if self._device is None or self._llm is None:
             QMessageBox.warning(
                 self, "Not Ready",
@@ -423,62 +518,42 @@ class TeachTab(QWidget):
             QMessageBox.warning(self, "Empty Step", "Write an instruction first.")
             return
 
+        # Start the test
+        self._testing_row = row
         self.test_log.clear()
         self._append_test_log(f"▶ Testing step {step.step_index}: {step.instruction}")
+        self._render_steps()  # show "Testing…" status
 
-        # Build a minimal single-step plan and run it through the executor
-        from ..planner import Plan, PlanStep
-        from ..executor import Executor, ExecutorConfig
-        from ..watchers import WatcherManager
-
-        plan = Plan(
-            goal=f"Execute this single instruction: {step.instruction}",
-            task_notes=self._current_task.notes or "None",
-            steps=[
-                PlanStep(
-                    step_id=1,
-                    action_description=step.instruction,
-                    expected_outcome="The instruction is completed successfully",
-                    is_optional=False,
-                    status="pending",
-                )
-            ],
-        )
-
-        # Step 0 (go home) only for step_index == 1
-        if step.step_index == 1:
-            self._append_test_log("  → This is step 1, performing home + clean first.")
-            self._device.go_home_and_clean()
-
-        config = ExecutorConfig(
-            max_iterations=15,
-            use_vision=False,
-        )
-        watchers = WatcherManager(self._device.d)
-        executor = Executor(
+        self._test_worker = _StepTestWorker(
             device=self._device,
             llm=self._llm,
-            watchers=watchers,
-            config=config,
-            on_log=self._append_test_log,
+            instruction=step.instruction,
+            task_notes=self.notes_input.toPlainText().strip(),
+            do_home_first=(step.step_index == 1),
         )
+        self._test_worker.log_message.connect(self._append_test_log)
+        self._test_worker.finished_ok.connect(self._on_test_passed)
+        self._test_worker.finished_fail.connect(self._on_test_failed)
+        self._test_worker.start()
 
-        try:
-            results = executor.run(plan)
-            if results and results[0].success:
-                step.last_result = "success"
-                step.last_error = ""
-                self._append_test_log("✓ Step completed successfully!")
-            else:
-                step.last_result = "failed"
-                note = results[0].note if results else "unknown error"
-                step.last_error = note
-                self._append_test_log(f"✗ Step failed: {note}")
-        except Exception as exc:
+    def _on_test_passed(self) -> None:
+        if self._current_task and 0 <= self._testing_row < len(self._current_task.steps):
+            step = self._current_task.steps[self._testing_row]
+            step.last_result = "success"
+            step.last_error = ""
+        self._append_test_log("✓ Step completed successfully!")
+        self._append_test_log("→ Did the device do the right thing? Click ✓ to verify.")
+        self._testing_row = -1
+        self._render_steps()
+
+    def _on_test_failed(self, reason: str) -> None:
+        if self._current_task and 0 <= self._testing_row < len(self._current_task.steps):
+            step = self._current_task.steps[self._testing_row]
             step.last_result = "failed"
-            step.last_error = str(exc)
-            self._append_test_log(f"✗ Step error: {exc}")
-
+            step.last_error = reason
+        self._append_test_log(f"✗ Step failed: {reason}")
+        self._append_test_log("→ Fix the instruction and try again.")
+        self._testing_row = -1
         self._render_steps()
 
     def _on_verify_step(self, row: int) -> None:
@@ -532,7 +607,6 @@ class TeachTab(QWidget):
     # ---- Log ------------------------------------------------------------ #
 
     def _append_test_log(self, msg: str) -> None:
-        from datetime import datetime
         ts = datetime.now().strftime("[%H:%M:%S]")
         self.test_log.appendPlainText(f"{ts} {msg}")
         self.log.emit(msg)

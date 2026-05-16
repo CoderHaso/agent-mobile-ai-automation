@@ -96,7 +96,7 @@ class AppCatalog:
         apps.sort(key=lambda a: a.label.lower())
         self._apps = apps
         self._fetched_at = now
-        log.info("App catalog refreshed: %d package(s)", len(apps))
+        log.debug("App catalog refreshed: %d package(s)", len(apps))
         return self._apps
 
     def _list_package_names(self) -> List[str]:
