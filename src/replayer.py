@@ -257,6 +257,12 @@ class TaskReplayer:
             if not d.open_app(t):
                 raise ActionExecutionError(f"open_app({t}) failed")
             return
+        if kind == "force_stop":
+            if not t:
+                raise ActionExecutionError("force_stop requires a package")
+            if not d.force_stop(t):
+                raise ActionExecutionError(f"force_stop({t}) failed")
+            return
         if kind == "scroll_to":
             if not t or not d.smart_scroll(t, kt):
                 raise ActionExecutionError(f"scroll_to({t!r}) failed")

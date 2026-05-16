@@ -210,6 +210,9 @@ Action rules:
   • For `press`, target ∈ {back, home, enter, menu, recent}.
   • For `swipe`, target ∈ {left, right, up, down} — launcher page turns.
   • For `open_app`, target is an Android package name.
+  • For `force_stop`, target is an Android package name. Use this when an
+    app is stuck, frozen, or you need to restart it from scratch. The app
+    will be killed and you can re-launch it cleanly with `open_app`.
   • For `index` target_kind, target is the integer index of the element from CURRENT_SCREEN. Use this as a bulletproof fallback when an element has no clear text label or content_desc.
   • Use `done` when goal_complete=true.
   • Use `give_up` only after multiple failed attempts AND no plausible
@@ -222,7 +225,7 @@ Action rules:
 # --------------------------------------------------------------------------- #
 
 _VALID_ACTIONS = {
-    "click", "type", "press", "open_app", "scroll_to", "swipe",
+    "click", "type", "press", "open_app", "force_stop", "scroll_to", "swipe",
     "wait", "back", "done", "give_up",
 }
 _VALID_TARGET_KINDS = {"text", "resource_id", "content_desc", "key", "package", "none", "index"}
@@ -368,6 +371,22 @@ class Executor:
         per_step: Dict[int, StepResult] = {
             s.step_id: StepResult(step=s, success=False) for s in plan.steps
         }
+
+        # --- STEP 0: CLEAN STATE ---
+        # Always start from home launcher with related apps force-stopped.
+        # This ensures both normal and macro-replay runs start identically.
+        try:
+            related_pkgs = self._extract_related_packages(plan)
+            if related_pkgs:
+                self.on_log(
+                    f"▸ Step 0: Resetting to home & force-stopping "
+                    f"{len(related_pkgs)} related app(s): {', '.join(related_pkgs)}"
+                )
+            else:
+                self.on_log("▸ Step 0: Resetting to home launcher.")
+            self.device.go_home_and_clean(related_pkgs)
+        except Exception as exc:
+            self.on_log(f"⚠ Clean-start failed (continuing anyway): {exc}")
 
         self.watchers.start()
         try:
@@ -712,6 +731,32 @@ class Executor:
                 "use Samsung Internet / Chrome from INSTALLED_APPS or Play Store."
             )
 
+    def _extract_related_packages(self, plan: Plan) -> List[str]:
+        """Identify packages related to the goal that should be force-stopped."""
+        from .app_catalog import KNOWN_ALIASES
+        goal_l = plan.goal.lower()
+        pkgs: List[str] = []
+        
+        # Check known aliases
+        for alias, candidates in KNOWN_ALIASES.items():
+            if alias in goal_l:
+                for pkg in candidates:
+                    if self.device.is_package_installed(pkg) and pkg not in pkgs:
+                        pkgs.append(pkg)
+        
+        # Also check if the goal mentions Google account creation
+        if "google" in goal_l or "gmail" in goal_l:
+            google_pkgs = [
+                "com.google.android.gms",       # Google Play Services (account flow)
+                "com.google.android.gm",        # Gmail
+                "com.google.android.gsf.login", # Google sign-in
+            ]
+            for pkg in google_pkgs:
+                if self.device.is_package_installed(pkg) and pkg not in pkgs:
+                    pkgs.append(pkg)
+        
+        return pkgs
+
     def _guard_decision(
         self,
         decision: AgentDecision,
@@ -817,6 +862,12 @@ class Executor:
                 raise ActionExecutionError("open_app requires a package target")
             if not self.device.open_app(t):
                 raise ActionExecutionError(f"open_app({t}) failed")
+            return
+        if kind == "force_stop":
+            if not t:
+                raise ActionExecutionError("force_stop requires a package target")
+            if not self.device.force_stop(t):
+                raise ActionExecutionError(f"force_stop({t}) failed")
             return
         if kind == "scroll_to":
             if not t:

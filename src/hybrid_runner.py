@@ -95,6 +95,21 @@ class HybridRunner:
     def run(self, plan: Plan) -> HybridResult:
         result = HybridResult(success=False)
 
+        # --- STEP 0: CLEAN STATE ---
+        # Always start from home with related apps force-stopped.
+        try:
+            related_pkgs = self._extract_related_packages(plan)
+            if related_pkgs:
+                self.on_log(
+                    f"▸ Step 0: Resetting to home & force-stopping "
+                    f"{len(related_pkgs)} related app(s): {', '.join(related_pkgs)}"
+                )
+            else:
+                self.on_log("▸ Step 0: Resetting to home launcher.")
+            self.device.go_home_and_clean(related_pkgs)
+        except Exception as exc:
+            self.on_log(f"⚠ Clean-start failed (continuing anyway): {exc}")
+
         # ----- Phase 1: try library replay -----
         macro = self.library.find_for_goal(plan.goal)
         if macro is not None and macro.actions:
@@ -205,3 +220,27 @@ class HybridRunner:
         else:
             result.note = "AI did not complete the goal; nothing to save"
         return result
+
+    def _extract_related_packages(self, plan: Plan) -> list[str]:
+        """Identify packages related to the goal that should be force-stopped."""
+        from .app_catalog import KNOWN_ALIASES
+        goal_l = plan.goal.lower()
+        pkgs: list[str] = []
+        
+        for alias, candidates in KNOWN_ALIASES.items():
+            if alias in goal_l:
+                for pkg in candidates:
+                    if self.device.is_package_installed(pkg) and pkg not in pkgs:
+                        pkgs.append(pkg)
+        
+        if "google" in goal_l or "gmail" in goal_l:
+            google_pkgs = [
+                "com.google.android.gms",
+                "com.google.android.gm",
+                "com.google.android.gsf.login",
+            ]
+            for pkg in google_pkgs:
+                if self.device.is_package_installed(pkg) and pkg not in pkgs:
+                    pkgs.append(pkg)
+        
+        return pkgs

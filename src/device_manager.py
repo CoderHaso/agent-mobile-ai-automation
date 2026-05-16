@@ -366,6 +366,56 @@ class DeviceManager:
         """Reset to launcher — safer than back when stuck in shade/overlay."""
         return self.press("home")
 
+    def force_stop(self, package: str) -> bool:
+        """Force-stop an app via `am force-stop`. Returns True if command ran."""
+        if not package:
+            return False
+        try:
+            self.shell(f"am force-stop {package}")
+            log.info("force_stop(%s): done", package)
+            return True
+        except Exception as exc:
+            log.warning("force_stop(%s) failed: %s", package, exc)
+            return False
+
+    def get_current_focus(self) -> str:
+        """Return the currently focused window/activity via dumpsys."""
+        try:
+            out = self.shell("dumpsys window | grep mCurrentFocus")
+            # Format: mCurrentFocus=Window{hash u0 com.pkg/.Activity}
+            if "mCurrentFocus" in out:
+                return out.strip()
+            return ""
+        except Exception:
+            return ""
+
+    def is_app_running(self, package: str) -> bool:
+        """Check if an app process is currently running."""
+        if not package:
+            return False
+        try:
+            out = self.shell(f"pidof {package}")
+            return bool(out.strip())
+        except Exception:
+            return False
+
+    def go_home_and_clean(self, packages: list[str] | None = None) -> None:
+        """Reset to home launcher and force-stop specified packages.
+        
+        This is the FIRST step of every task — ensures a clean state.
+        """
+        self.press("home")
+        self.wait(0.5)
+        if packages:
+            for pkg in packages:
+                self.force_stop(pkg)
+            self.wait(0.3)
+        # Press home again to ensure we're on the launcher
+        self.press("home")
+        self.wait(0.5)
+        log.info("go_home_and_clean: reset complete (stopped %d app(s))",
+                 len(packages or []))
+
     def swipe(self, direction: str, *, scale: float = 0.75) -> bool:
         """Swipe on screen (left/right/up/down). Used for launcher pages."""
         direction = (direction or "").lower().strip()
