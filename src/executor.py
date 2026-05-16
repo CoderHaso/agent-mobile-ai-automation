@@ -171,11 +171,12 @@ When scanning CURRENT_SCREEN, prefer in this order:
 Use resource_id when present, otherwise text, otherwise content_desc.
 
 ═════════════════════════ FORM VALIDATION & ERRORS ══════════════════
-If you see an error like 'Username is taken' or 'Invalid password', you
-must type a new value. HOWEVER, typing the new value WILL NOT make the
-error message disappear immediately! You MUST click 'Next' or 'Submit'
-again after typing to trigger validation. Do NOT get stuck in a loop
-typing new values repeatedly without clicking Next.
+If you see an error (e.g. 'Username taken'), you must type a new value or click a suggested username. 
+CRITICAL RULE: Typing a new value or clicking a suggestion WILL NOT make the error disappear! 
+Your VERY NEXT ACTION must ALWAYS be clicking 'Next' or 'Submit' to validate the new input.
+NEVER type into a field, and then immediately type into it again.
+NEVER select a suggested username, and then immediately type a new one. 
+ALWAYS click 'Next' after altering form data!
 
 ═════════════════════════ INPUTS PER ITERATION ══════════════════════
   • GOAL              the high-level user objective (THIS is what matters)
