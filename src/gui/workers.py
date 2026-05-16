@@ -16,8 +16,10 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 from ..device_manager import DeviceManager, list_adb_devices, AdbDeviceInfo
 from ..executor import Executor, ExecutorConfig, StepResult
+from ..hybrid_runner import HybridResult, HybridRunner, RunPhase
 from ..llm_client import LLMClient
 from ..planner import Plan, PlanStep, Planner
+from ..task_library import TaskLibrary
 from ..watchers import WatcherManager
 
 
@@ -55,16 +57,24 @@ class PlannerWorker(QThread):
 
 
 class ExecutorWorker(QThread):
-    """Drive the approved plan through the device.
+    """Drive the approved plan through the device using the HybridRunner.
 
-    Emits granular signals so the GUI can update a per-step status table
-    and a streaming log without polling.
+    The hybrid pipeline is:
+        1. Try to replay a recorded macro for the goal (no LLM).
+        2. If the macro is missing or the device's UI changed → fall
+           back to the LLM-driven Executor and capture a fresh macro.
+
+    Emits granular signals so the GUI can render per-milestone status,
+    a streaming log, the current PHASE (replay vs ai), and a one-shot
+    `finished_with_hybrid` carrying the full HybridResult.
     """
 
     log_message = Signal(str)
-    step_status_changed = Signal(int, str)   # step_id, status (pending|running|done|failed|skipped)
+    step_status_changed = Signal(int, str)   # step_id, status
     step_progress = Signal(int, str)         # step_id, freeform progress message
-    finished_with_results = Signal(list)     # List[StepResult]
+    phase_changed = Signal(str, str)         # phase ('replay'|'ai'), info
+    finished_with_results = Signal(list)     # List[StepResult]  (legacy; only AI part)
+    finished_with_hybrid = Signal(object)    # HybridResult — full picture
     failed = Signal(str)
 
     def __init__(
@@ -73,43 +83,55 @@ class ExecutorWorker(QThread):
         llm: LLMClient,
         plan: Plan,
         config: Optional[ExecutorConfig] = None,
+        library: Optional[TaskLibrary] = None,
     ) -> None:
         super().__init__()
         self._device = device
         self._llm = llm
         self._plan = plan
         self._config = config or ExecutorConfig()
-        self._executor: Optional[Executor] = None
+        self._library = library or TaskLibrary()
+        self._runner: Optional[HybridRunner] = None
 
     def request_stop(self) -> None:
-        if self._executor is not None:
-            self._executor.request_stop()
-        self.log_message.emit("Stop requested — agent will halt at the next safe boundary…")
+        if self._runner is not None:
+            self._runner.request_stop()
+        self.log_message.emit("Stop requested — halting at the next safe boundary…")
 
-    def _on_progress(self, step: PlanStep, message: str) -> None:
-        # Bridge plain Python callback into Qt signals (thread-safe).
-        self.step_progress.emit(step.step_id, message)
-        if message in {"pending", "running", "done", "failed", "skipped", "stopped"}:
-            normalized = "skipped" if message == "stopped" else message
-            self.step_status_changed.emit(step.step_id, normalized)
+    def _on_milestone(self, mid: int, message: str) -> None:
+        self.step_progress.emit(mid, message)
+        if message in {"pending", "running", "done", "failed", "skipped", "stopped", "broken"}:
+            normalized = (
+                "skipped" if message == "stopped"
+                else "failed" if message == "broken"
+                else message
+            )
+            self.step_status_changed.emit(mid, normalized)
 
     def _on_log(self, msg: str) -> None:
         self.log_message.emit(msg)
 
+    def _on_phase(self, phase: RunPhase, info: str) -> None:
+        self.phase_changed.emit(phase.value, info)
+
     def run(self) -> None:
         try:
             watchers = WatcherManager(self._device.d)
-            self._executor = Executor(
+            self._runner = HybridRunner(
                 device=self._device,
                 llm=self._llm,
                 watchers=watchers,
+                library=self._library,
                 config=self._config,
-                on_progress=self._on_progress,
                 on_log=self._on_log,
+                on_phase=self._on_phase,
+                on_milestone_status=self._on_milestone,
             )
-            self.log_message.emit("Background watchers registered.")
-            results = self._executor.run(self._plan)
-            self.finished_with_results.emit(results)
+            self.log_message.emit("Hybrid runner ready (macro library + AI fallback).")
+            result: HybridResult = self._runner.run(self._plan)
+            self.finished_with_hybrid.emit(result)
+            # legacy compat
+            self.finished_with_results.emit(result.ai_results)
         except Exception as exc:
             self.failed.emit(str(exc))
 

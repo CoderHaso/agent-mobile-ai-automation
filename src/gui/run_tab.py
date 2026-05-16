@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -30,8 +31,10 @@ from PySide6.QtWidgets import (
 
 from ..device_manager import DeviceManager
 from ..executor import ExecutorConfig, StepResult
+from ..hybrid_runner import HybridResult
 from ..llm_client import LLMClient
 from ..planner import Plan
+from ..task_library import TaskLibrary
 from .style import STATUS_COLORS
 from .workers import ExecutorWorker
 
@@ -42,13 +45,15 @@ _HEADERS = ("#", "Milestone", "Recognize when done", "Opt", "Status")
 class RunTab(QWidget):
     finished_with_results = Signal(list)
     log = Signal(str)
+    macro_saved = Signal(object)   # RecordedTask
 
-    def __init__(self) -> None:
+    def __init__(self, library: Optional[TaskLibrary] = None) -> None:
         super().__init__()
         self._device: Optional[DeviceManager] = None
         self._llm: Optional[LLMClient] = None
         self._plan: Optional[Plan] = None
         self._worker: Optional[ExecutorWorker] = None
+        self._library = library or TaskLibrary()
         self._build()
 
     # ---- public API ----------------------------------------------------- #
@@ -57,7 +62,7 @@ class RunTab(QWidget):
         self._device = device
         self._llm = llm
 
-    def start_with_plan(self, plan: Plan) -> None:
+    def start_with_plan(self, plan: Plan, *, use_vision: bool = False) -> None:
         if self._device is None or self._llm is None:
             self._append_log("⚠ Device or LLM is not ready.")
             return
@@ -70,17 +75,25 @@ class RunTab(QWidget):
         self.progress.setMaximum(max(1, len(plan.steps)))
         self.btn_stop.setEnabled(True)
 
-        self._append_log(f"▶ Starting adaptive execution. Goal: {plan.goal!r}")
-        self._append_log(f"  {len(plan.steps)} milestone(s) — agent will adapt to each screen.")
+        vision_note = "vision ON" if use_vision else "vision OFF (XML only)"
+        self._append_log(f"▶ Starting hybrid execution. Goal: {plan.goal!r}")
+        self._append_log(
+            f"  {len(plan.steps)} milestone(s) — replay first, AI on fallback · {vision_note}"
+        )
+        self.phase_badge.setText("checking macro library…")
+        self.phase_badge.setStyleSheet(self._badge_style("library"))
         self._worker = ExecutorWorker(
             device=self._device,
             llm=self._llm,
             plan=plan,
-            config=ExecutorConfig(),
+            config=ExecutorConfig(use_vision=use_vision),
+            library=self._library,
         )
         self._worker.log_message.connect(self._append_log)
         self._worker.step_status_changed.connect(self._on_step_status)
         self._worker.step_progress.connect(self._on_step_progress)
+        self._worker.phase_changed.connect(self._on_phase_changed)
+        self._worker.finished_with_hybrid.connect(self._on_hybrid_finished)
         self._worker.finished_with_results.connect(self._on_finished)
         self._worker.failed.connect(self._on_failed)
         self._worker.start()
@@ -92,9 +105,18 @@ class RunTab(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
-        title = QLabel("Step 3 — Adaptive run & monitor")
+        # --- title row with phase badge ---
+        title_row = QHBoxLayout()
+        title_row.setSpacing(10)
+        title = QLabel("Step 3 — Hybrid run & monitor")
         title.setObjectName("h1")
-        layout.addWidget(title)
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        self.phase_badge = QLabel("idle")
+        self.phase_badge.setObjectName("statusBadge")
+        self.phase_badge.setStyleSheet(self._badge_style("idle"))
+        title_row.addWidget(self.phase_badge)
+        layout.addLayout(title_row)
 
         self.now_doing = QLabel("Idle")
         self.now_doing.setObjectName("h2")
@@ -247,15 +269,107 @@ class RunTab(QWidget):
         self.btn_stop.setEnabled(False)
         ok = sum(1 for r in results if r.success)
         total_planned = len(self._plan.steps) if self._plan else len(results)
-        self.results_label.setText(
-            f"Completed: {ok}/{total_planned} step(s) succeeded "
-            f"({len(results)} executed)."
-        )
-        self._append_log(f"■ Execution finished — {ok}/{total_planned} succeeded.")
+        if results:
+            self.results_label.setText(
+                f"Completed: {ok}/{total_planned} step(s) succeeded "
+                f"({len(results)} executed)."
+            )
+            self._append_log(f"■ Execution finished — {ok}/{total_planned} succeeded.")
         self.finished_with_results.emit(results)
+
+    @staticmethod
+    def _badge_style(phase: str) -> str:
+        colors = {
+            "idle":    ("#2a2b3a", "#8e8ea0"),
+            "library": ("#2c2d3a", "#fdcb6e"),
+            "replay":  ("#1f8a3a", "#ffffff"),
+            "ai":      ("#6c5ce7", "#ffffff"),
+            "done":    ("#1f8a3a", "#ffffff"),
+            "fail":    ("#d63031", "#ffffff"),
+        }
+        bg, fg = colors.get(phase, colors["idle"])
+        return (
+            f"QLabel#statusBadge{{background:{bg};color:{fg};"
+            "padding:4px 10px;border-radius:10px;font-weight:600;}}"
+        )
+
+    def _on_phase_changed(self, phase: str, info: str) -> None:
+        labels = {
+            "replay": "▶ Replaying macro (no LLM)",
+            "ai":     "🧠 AI agent active",
+        }
+        self.phase_badge.setText(labels.get(phase, phase))
+        self.phase_badge.setStyleSheet(self._badge_style(phase))
+        self._append_log(f"⇢ Phase: {phase} — {info}")
+
+    def _on_hybrid_finished(self, result: HybridResult) -> None:
+        """Update final UI state and offer to save a fresh macro."""
+        self.btn_stop.setEnabled(False)
+        if result.success:
+            self.phase_badge.setText("✓ done")
+            self.phase_badge.setStyleSheet(self._badge_style("done"))
+            note = result.note or "completed"
+            self.results_label.setText(f"✓ Goal achieved — {note}")
+        else:
+            self.phase_badge.setText("✗ failed / partial")
+            self.phase_badge.setStyleSheet(self._badge_style("fail"))
+            self.results_label.setText(
+                f"Run did not fully complete. {result.note}"
+            )
+
+        # Offer to save a NEW macro only if the AI phase finished a fresh
+        # recording successfully (the replay-only path doesn't create one).
+        if (
+            result.success
+            and result.new_recording is not None
+            and result.new_recording.has_actions()
+        ):
+            self._offer_save_macro(result)
+
+    def _offer_save_macro(self, result: HybridResult) -> None:
+        rec = result.new_recording
+        if rec is None:
+            return
+
+        # Build the canonical (clean) task once so we can show the count.
+        clean = rec.build_task(drop_recovery=True)
+        n = len(clean.actions)
+        n_dyn = sum(1 for a in clean.actions if a.is_dynamic)
+
+        replaced_existing = (
+            result.used_macro is not None
+            and result.used_macro.task_id() == clean.task_id()
+        )
+        verb = "Update existing macro" if replaced_existing else "Save this run as a reusable macro"
+
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle("Save macro?")
+        msg.setText(
+            f"<b>{verb}?</b><br><br>"
+            f"Goal: <i>{clean.goal}</i><br>"
+            f"Steps: <b>{n}</b> "
+            f"({n_dyn} with dynamic placeholder fields)<br><br>"
+            "Saving lets future runs of this goal SKIP the LLM and "
+            "replay the recorded steps directly. The agent will only "
+            "fall back to AI if the screen no longer matches."
+        )
+        msg.setStandardButtons(QMessageBox.Save | QMessageBox.Discard)
+        if msg.exec() == QMessageBox.Save:
+            try:
+                path = self._library.save(clean)
+                self._append_log(f"💾 Macro saved → {path}")
+                self.macro_saved.emit(clean)
+            except Exception as exc:
+                self._append_log(f"✗ Failed to save macro: {exc}")
+                QMessageBox.critical(self, "Save failed", str(exc))
+        else:
+            self._append_log("Macro discarded — not saved.")
 
     def _on_failed(self, msg: str) -> None:
         self.btn_stop.setEnabled(False)
+        self.phase_badge.setText("✗ crash")
+        self.phase_badge.setStyleSheet(self._badge_style("fail"))
         self.results_label.setText(f"❌ Crash: {msg}")
         self._append_log(f"✗ Executor crashed: {msg}")
 

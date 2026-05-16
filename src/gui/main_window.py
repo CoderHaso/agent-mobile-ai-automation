@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 from ..device_manager import DeviceManager
 from ..llm_client import LLMClient
 from ..planner import Plan
+from ..task_library import TaskLibrary
 from .devices_tab import DevicesTab
 from .plan_tab import PlanTab
 from .run_tab import RunTab
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         self._device: Optional[DeviceManager] = None
         self._llm: Optional[LLMClient] = None
         self._llm_worker: Optional[LLMConnectWorker] = None
+        self._library = TaskLibrary()
 
         self._build_ui()
         self._build_statusbar()
@@ -68,8 +70,8 @@ class MainWindow(QMainWindow):
         self.tabs.setDocumentMode(True)
 
         self.devices_tab = DevicesTab()
-        self.plan_tab = PlanTab()
-        self.run_tab = RunTab()
+        self.plan_tab = PlanTab(library=self._library)
+        self.run_tab = RunTab(library=self._library)
 
         self.tabs.addTab(self.devices_tab, "1 · Devices")
         self.tabs.addTab(self.plan_tab,    "2 · Plan")
@@ -102,6 +104,7 @@ class MainWindow(QMainWindow):
 
         self.run_tab.log.connect(self._set_status)
         self.run_tab.finished_with_results.connect(self._on_run_finished)
+        self.run_tab.macro_saved.connect(self._on_macro_saved)
 
     # ---- bootstrapping ------------------------------------------------- #
 
@@ -165,6 +168,11 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(1)
         if self._llm is not None:
             self.run_tab.attach_runtime(dm, self._llm)
+        try:
+            n = len(dm.list_installed_apps(force=True))
+            self._set_status(f"Device ready — {n} installed app(s) indexed via ADB.")
+        except Exception:
+            pass
 
     def _on_plan_approved(self, plan: Plan) -> None:
         if self._device is None or self._llm is None:
@@ -175,12 +183,21 @@ class MainWindow(QMainWindow):
             return
         self.tabs.setTabEnabled(2, True)
         self.tabs.setCurrentIndex(2)
-        self.run_tab.start_with_plan(plan)
+        self.run_tab.start_with_plan(
+            plan,
+            use_vision=self.plan_tab.use_vision_enabled(),
+        )
 
     def _on_run_finished(self, results: list) -> None:
         ok = sum(1 for r in results if r.success)
         total = len(results)
         self._set_status(f"Run finished: {ok}/{total} succeeded.")
+
+    def _on_macro_saved(self, _task) -> None:
+        # Refresh the saved-macros panel on the Plan tab so the user
+        # can see (and reuse) the macro they just kept.
+        self.plan_tab.refresh_library()
+        self._set_status("Macro saved to library.")
 
     # ---- helpers ------------------------------------------------------- #
 

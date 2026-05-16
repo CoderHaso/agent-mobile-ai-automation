@@ -104,6 +104,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print the registered model catalog (with stars + pricing) and exit.",
     )
+    p.add_argument(
+        "--vision",
+        action="store_true",
+        help="Send screenshots to the LLM (requires a vision-capable model).",
+    )
     return p.parse_args()
 
 
@@ -189,6 +194,11 @@ def _connect_device(serial: str | None) -> DeviceManager | None:
     dm = DeviceManager(serial=serial)
     try:
         dm.connect()
+        try:
+            n = len(dm.list_installed_apps(force=True))
+            cli_ui.console.print(f"[dim]Indexed {n} installed app(s) via ADB.[/dim]")
+        except Exception:
+            pass
         return dm
     except DeviceConnectionError as exc:
         cli_ui.fatal(
@@ -245,6 +255,7 @@ def _run_once(args: argparse.Namespace, llm: LLMClient, device: DeviceManager) -
             watchers=watchers,
             config=ExecutorConfig(
                 settle_seconds=args.settle,
+                use_vision=bool(args.vision),
             ),
             on_progress=cli_ui.step_progress,
         )

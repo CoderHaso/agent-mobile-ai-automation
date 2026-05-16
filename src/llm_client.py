@@ -158,13 +158,20 @@ class LLMClient:
         last_error: Optional[Exception] = None
         for attempt in range(1, self.config.max_retries + 1):
             try:
-                user_content = []
-                user_content.append({"type": "text", "text": user_prompt})
+                # Most chat models expect a plain string. Only attach the
+                # OpenAI-style multimodal array when we actually have an image.
                 if image_base64:
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image_base64}"}
-                    })
+                    user_content = [
+                        {"type": "text", "text": user_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{image_base64}",
+                            },
+                        },
+                    ]
+                else:
+                    user_content = user_prompt
 
                 kwargs: dict = {
                     "model": self.config.model,
@@ -203,15 +210,32 @@ class LLMClient:
 
             except Exception as exc:
                 last_error = exc
-                exc_str = str(exc)
-                if "image_url" in exc_str or "variant" in exc_str:
+                exc_str = str(exc).lower()
+                # Groq text-only models return 400 "content must be a string"
+                # when we send a multimodal content array with an image.
+                vision_rejected = (
+                    image_base64
+                    and any(
+                        needle in exc_str
+                        for needle in (
+                            "image_url",
+                            "image",
+                            "vision",
+                            "multimodal",
+                            "must be a string",
+                            "invalid content",
+                            "content type",
+                        )
+                    )
+                )
+                if vision_rejected:
                     log.warning(
-                        "Model %s does not support vision (image_url). Falling back to text-only.",
-                        self.config.model
+                        "Model %s rejected vision input — retrying text-only.",
+                        self.config.model,
                     )
                     image_base64 = None
-                    continue  # retry immediately without image
-                
+                    continue
+
                 log.warning(
                     "Unexpected LLM error (attempt %d/%d): %s",
                     attempt, self.config.max_retries, exc,

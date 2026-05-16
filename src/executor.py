@@ -41,7 +41,10 @@ from .device_manager import (
     Observation,
 )
 from .llm_client import LLMClient, LLMResponseError
+from .models import find as find_model
 from .planner import Plan, PlanStep
+from .recorder import TaskRecorder
+from .screen_context import ScreenContext, analyze_screen
 from .ui_parser import parse_hierarchy, summarize_for_prompt
 from .watchers import WatcherManager
 
@@ -58,14 +61,14 @@ Observe → Reason → Act loop. Your purpose is to achieve WHATEVER goal
 the user gave you, no matter the app or domain.
 
 ═════════════════════════ PRIMARY DIRECTIVE ═════════════════════════
-The CURRENT_SCREEN and the provided SCREENSHOT are your GROUND TRUTH. 
-Pick the SINGLE next action that most directly progresses the GOAL based 
-on WHAT YOU CAN SEE RIGHT NOW. Do NOT cling to a milestone if the screen 
-is asking for something different — REACT TO THE SCREEN.
+The CURRENT_SCREEN is your GROUND TRUTH. Pick the SINGLE next action that
+most directly progresses the GOAL based on WHAT YOU CAN SEE RIGHT NOW.
+Do NOT cling to a milestone if the screen is asking for something
+different — REACT TO THE SCREEN.
 
-Use the provided screenshot to VERIFY the state of elements (e.g., if a 
-checkbox is already checked, or a text field is already focused/filled) 
-that might not be fully clear from the JSON CURRENT_SCREEN list alone.
+When VISION_ENABLED is true, a SCREENSHOT is also attached — use it only
+then to verify checkbox state, colors, or layout not obvious from XML.
+When VISION_ENABLED is false, rely on CURRENT_SCREEN + INSTALLED_APPS only.
 
 How to think every iteration:
   1. Read the GOAL.
@@ -75,7 +78,8 @@ How to think every iteration:
   4. Ask "does any visible element move me deeper into the flow?"
      (forward navigation, "Next", "Continue", search, etc.)
      → Take it.
-  5. Otherwise: scroll to reveal more, or press back to escape.
+  5. Otherwise: swipe launcher pages, open the app drawer, or press HOME
+     (not BACK) to reset — never thrash on the notification shade.
 
 Adaptive behavior examples (abstract — apply to any domain):
   • The active milestone is "Pick a value X" but the screen is asking
@@ -87,11 +91,15 @@ Adaptive behavior examples (abstract — apply to any domain):
   • A screen offers multiple paths (a list of options) → pick the one
     whose label most clearly matches the GOAL's subject. If none match,
     pick the most generic forward option and back out if it's wrong.
-  • MISSING APPS: If your goal is to open or use an app, but it is not
-    installed on the device, do NOT repeatedly search for it or try to
-    open its package. Instead, actively click 'Install', 'Get', or Google Play
-    results to install it, or use a web browser alternative if applicable.
-    Recognize app store listings in search results and click them.
+  • OPENING APPS — ALWAYS consult INSTALLED_APPS first:
+    - If the goal mentions an app (Gmail, WhatsApp, Settings, …), find its
+      exact `package` in INSTALLED_APPS or SUGGESTED_PACKAGES.
+    - Use `open_app` with that exact package string (e.g. com.google.android.gm).
+    - NEVER claim an app is missing if its package appears in INSTALLED_APPS.
+    - Only pursue Play Store / Install flows when the package is genuinely
+      absent from INSTALLED_APPS AND you are on a store/search screen.
+    - You may also launch via the launcher: tap the app icon label from
+      CURRENT_SCREEN when that is faster than open_app.
 
 MILESTONES are a destination MAP (where we're going), NOT a SCRIPT
 (how to get there). Mark them done in any order as you complete them.
@@ -119,12 +127,30 @@ THESE ARE CRITICAL. Violating them causes the agent to hang.
      b. Scroll to reveal off-screen elements.
      c. Press back to escape.
 
+═════════════════════════ LAUNCHER & NOTIFICATION SHADE ═══════════════
+Read SCREEN_CONTEXT every turn.
+
+  • If `is_notification_shade` is true:
+    - NEVER press BACK repeatedly — that toggles the shade and wastes time.
+    - Press HOME once, OR swipe UP from the bottom center to close it.
+  • If `is_launcher` is true and you need an app:
+    - FIRST: `open_app` with the exact package from INSTALLED_APPS /
+      SUGGESTED_PACKAGES (e.g. com.google.android.gm for Gmail).
+    - SECOND: click the app icon label visible on screen.
+    - THIRD: click "Apps" / "Uygulamalar" to open the app drawer, OR
+      `swipe` left/right for another home-screen page.
+    - NEVER use `scroll_to` with a resource-id (e.g. …:id/workspace)
+      or a bare number — use `swipe` left/right instead.
+  • If `open_app` failed for a package listed in INSTALLED_APPS, the
+    launch really failed — try another browser from INSTALLED_APPS or
+    Play Store, do NOT repeat the same package endlessly.
+
 ═════════════════════════ POPUP / OVERLAY ═══════════════════════════
 If CURRENT_APP is NOT the app your GOAL is about (e.g. a store /
 launcher / ad / system update banner / OEM nag pops over the target
 app), set `is_recovery=true` and dismiss the overlay:
   - close button / X / "Cancel" / "İptal" / "Not now" / "Sonra" /
-    "Later" / press back.
+    "Later" / press HOME (prefer HOME over BACK on launcher/shade).
 Do NOT update milestones during recovery.
 
 ═════════════════════════ ELEMENT PRIORITY ══════════════════════════
@@ -148,6 +174,10 @@ Use resource_id when present, otherwise text, otherwise content_desc.
   • GOAL              the high-level user objective (THIS is what matters)
   • MILESTONES        objectives with status — guideline only, not a script
   • CURRENT_APP       foreground package name
+  • SCREEN_CONTEXT    {is_launcher, is_notification_shade, is_app_drawer, hint}
+  • INSTALLED_APPS    apps on this device relevant to the GOAL (package + label)
+  • SUGGESTED_PACKAGES alias hints (keyword → package) when known
+  • VISION_ENABLED    whether a screenshot is attached this turn
   • CURRENT_SCREEN    interactable elements actually on screen now
   • RECENT_ACTIONS    last few actions with outcome (and whether the
                       screen changed)
@@ -169,7 +199,7 @@ Respond with ONE JSON object — no prose, no markdown fences:
   ],
   "is_recovery": false,
   "action": {
-    "kind": "click | type | press | open_app | scroll_to | wait | back | done | give_up",
+    "kind": "click | type | press | open_app | scroll_to | swipe | wait | back | done | give_up",
     "target": "<text | resource_id | content_desc | index | system key | package | empty>",
     "target_kind": "text | resource_id | content_desc | index | key | package | none",
     "input_value": "<only when kind=='type'>"
@@ -178,6 +208,7 @@ Respond with ONE JSON object — no prose, no markdown fences:
 
 Action rules:
   • For `press`, target ∈ {back, home, enter, menu, recent}.
+  • For `swipe`, target ∈ {left, right, up, down} — launcher page turns.
   • For `open_app`, target is an Android package name.
   • For `index` target_kind, target is the integer index of the element from CURRENT_SCREEN. Use this as a bulletproof fallback when an element has no clear text label or content_desc.
   • Use `done` when goal_complete=true.
@@ -191,7 +222,7 @@ Action rules:
 # --------------------------------------------------------------------------- #
 
 _VALID_ACTIONS = {
-    "click", "type", "press", "open_app", "scroll_to",
+    "click", "type", "press", "open_app", "scroll_to", "swipe",
     "wait", "back", "done", "give_up",
 }
 _VALID_TARGET_KINDS = {"text", "resource_id", "content_desc", "key", "package", "none", "index"}
@@ -281,6 +312,7 @@ class ExecutorConfig:
     settle_seconds: float = 1.2        # wait between act and observe
     history_window: int = 6            # recent actions sent to the LLM
     max_elements_in_prompt: int = 70
+    use_vision: bool = False           # send screenshot to LLM (user toggle)
 
 
 # --------------------------------------------------------------------------- #
@@ -300,6 +332,7 @@ class Executor:
         config: Optional[ExecutorConfig] = None,
         on_progress: Optional[ProgressCallback] = None,
         on_log: Optional[LogCallback] = None,
+        recorder: Optional[TaskRecorder] = None,
     ):
         self.device = device
         self.llm = llm
@@ -307,6 +340,7 @@ class Executor:
         self.config = config or ExecutorConfig()
         self.on_progress = on_progress or (lambda step, msg: None)
         self.on_log = on_log or (lambda msg: None)
+        self.recorder = recorder
         self._stop_requested = False
 
     def request_stop(self) -> None:
@@ -350,6 +384,10 @@ class Executor:
                     self.on_log(f"observe failed: {exc}")
                     continue
 
+                screen_ctx = analyze_screen(obs)
+                if it == 1:
+                    self._maybe_bootstrap_goal_app(plan, screen_ctx)
+
                 # --- 1b. DEAD-END LEARNING -------------------------------- #
                 # If our last action was a click and the screen DID NOT
                 # change, that target is a dead end on the screen we were on.
@@ -387,19 +425,27 @@ class Executor:
                     stall_hint = (
                         f"You have been on the SAME screen for "
                         f"{same_screen_count} iterations — STOP repeating "
-                        "yourself. Pick a DIFFERENT element, scroll, or "
-                        "press back."
+                        "yourself. Use open_app, swipe, app drawer, or HOME."
                     )
+                if screen_ctx.is_notification_shade:
+                    stall_hint = (
+                        (stall_hint + " ") if stall_hint else ""
+                    ) + screen_ctx.hint
 
                 forbidden = sorted(dead_ends.get(obs.screen_hash, set()))
 
                 try:
                     decision = self._reason(
                         plan, obs, list(recent), stall_hint, forbidden,
+                        screen_ctx,
                     )
                 except LLMResponseError as exc:
                     self.on_log(f"reasoner error: {exc}")
                     continue
+
+                decision = self._guard_decision(
+                    decision, screen_ctx, list(recent),
+                )
 
                 # Hard guardrail: if the LLM tries a forbidden target anyway,
                 # patch the action to a recovery (press back) and record it.
@@ -424,6 +470,8 @@ class Executor:
                 if decision.goal_complete or decision.action.kind == "done":
                     self.on_log("✓ Agent reports the GOAL is complete.")
                     self._finalize_remaining(plan, per_step, success=True)
+                    if self.recorder is not None:
+                        self.recorder.close()
                     break
 
                 if decision.action.kind == "give_up":
@@ -432,11 +480,67 @@ class Executor:
                     break
 
                 # --- 5. ACT ---
+                # Tell the recorder what we're about to do (pre-action snapshot).
+                # Skip recovery / wait / terminal actions — they pollute macros.
+                if self.recorder is not None and decision.action.kind not in (
+                    "done", "give_up", "wait"
+                ) and not decision.is_recovery:
+                    milestone_text = ""
+                    if decision.active_milestone_id is not None:
+                        ms = self._find_step(plan, decision.active_milestone_id)
+                        if ms is not None:
+                            milestone_text = ms.action_description
+                    rec_target = decision.action.target
+                    rec_target_kind = decision.action.target_kind
+                    if decision.action.kind == "open_app":
+                        resolved_pkg = self.device.resolve_package(rec_target)
+                        if resolved_pkg:
+                            rec_target = resolved_pkg
+                            rec_target_kind = "package"
+                    self.recorder.record_attempt(
+                        pre_obs=obs,
+                        action_kind=decision.action.kind,
+                        target=rec_target,
+                        target_kind=rec_target_kind,
+                        input_value=decision.action.input_value,
+                        milestone_id=decision.active_milestone_id,
+                        milestone_text=milestone_text,
+                        screen_summary=decision.screen_summary,
+                        is_recovery=decision.is_recovery,
+                    )
+
                 rec = self._act_with_record(decision)
                 recent.append(rec)
                 if rec.decision.active_milestone_id is not None:
                     per_step[rec.decision.active_milestone_id].actions.append(rec)
                     per_step[rec.decision.active_milestone_id].attempts += 1
+
+                # Settle then peek at the post-action screen so the recorder
+                # can compute verification anchors and finalize the step.
+                if self.recorder is not None:
+                    try:
+                        self.device.wait(self.config.settle_seconds * 0.5)
+                        post_obs = self.device.observe()
+                        progressed = (
+                            post_obs.screen_hash != obs.screen_hash
+                            or (post_obs.current_app or "")
+                            != (obs.current_app or "")
+                        )
+                        if decision.action.kind == "open_app":
+                            pkg = self.device.resolve_package(
+                                decision.action.target,
+                            ) or decision.action.target
+                            cur = post_obs.current_app or ""
+                            if pkg and (cur == pkg or cur.startswith(pkg)):
+                                progressed = True
+                        self.recorder.record_outcome(
+                            post_obs,
+                            success=rec.success,
+                            progressed=progressed,
+                        )
+                    except Exception as exc:
+                        log.debug("recorder post-observe failed: %s", exc)
+                        self.recorder.discard_pending()
 
                 last_obs = obs
                 last_action = decision.action
@@ -476,6 +580,7 @@ class Executor:
         recent: List[ActionRecord],
         stall_hint: str,
         forbidden_targets: List[str],
+        screen_ctx: ScreenContext,
     ) -> AgentDecision:
         elements = parse_hierarchy(obs.xml, include_text_labels=True)
         slim = summarize_for_prompt(
@@ -495,22 +600,44 @@ class Executor:
 
         recent_payload = [r.short() for r in recent]
 
-        # Capture screenshot for vision support
-        image_base64 = None
+        # Installed apps (ADB) — refreshed periodically, filtered by goal.
         try:
-            img = self.device.d.screenshot()
-            import io
+            app_block = self.device.apps.format_for_prompt(plan.goal)
+        except Exception as exc:
+            log.warning("Could not read installed apps: %s", exc)
+            app_block = {
+                "relevant_installed_apps": [],
+                "suggested_packages_for_goal": [],
+                "total_installed_count": 0,
+            }
+
+        # Screenshot for GUI always; LLM only when user enabled vision AND
+        # the model supports it.
+        image_base64 = None
+        use_vision = bool(self.config.use_vision)
+        try:
             import base64
+            import io
             import os
-            
-            # Save for GUI live view
+
+            img = self.device.d.screenshot()
             os.makedirs("ui_dumps", exist_ok=True)
             img.save("ui_dumps/current.png")
             self.on_log("Captured screenshot: ui_dumps/current.png")
-            
-            buffered = io.BytesIO()
-            img.save(buffered, format="PNG")
-            image_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+            if use_vision:
+                model_info = find_model(
+                    self.llm.config.provider, self.llm.config.model,
+                )
+                if model_info is not None and model_info.supports_vision:
+                    buffered = io.BytesIO()
+                    img.save(buffered, format="PNG")
+                    image_base64 = base64.b64encode(buffered.getvalue()).decode()
+                else:
+                    self.on_log(
+                        "Vision is ON but this model has no vision support — "
+                        "using XML only."
+                    )
         except Exception as exc:
             log.warning("Failed to capture screenshot for reasoning: %s", exc)
 
@@ -518,12 +645,20 @@ class Executor:
             f"GOAL: {plan.goal}\n"
             f"MILESTONES: {json.dumps(milestones_payload, ensure_ascii=False)}\n"
             f"CURRENT_APP: {obs.current_app or 'unknown'}\n"
+            f"SCREEN_CONTEXT: {json.dumps(screen_ctx.to_prompt_dict(), ensure_ascii=False)}\n"
+            f"VISION_ENABLED: {bool(image_base64)}\n"
+            f"INSTALLED_APPS: "
+            f"{json.dumps(app_block.get('relevant_installed_apps', []), ensure_ascii=False)}\n"
+            f"SUGGESTED_PACKAGES: "
+            f"{json.dumps(app_block.get('suggested_packages_for_goal', []), ensure_ascii=False)}\n"
+            f"TOTAL_INSTALLED_ON_DEVICE: {app_block.get('total_installed_count', 0)}\n"
             f"CURRENT_SCREEN: {json.dumps(slim, ensure_ascii=False)}\n"
             f"RECENT_ACTIONS: {json.dumps(recent_payload, ensure_ascii=False)}\n"
             f"FORBIDDEN_TARGETS: {json.dumps(forbidden_targets, ensure_ascii=False)}\n"
             f"STALL_HINT: {stall_hint}\n\n"
-            "Remember: react to WHAT YOU SEE on this screen. Do NOT click "
-            "anything in FORBIDDEN_TARGETS. Respond with ONE JSON decision now."
+            "Remember: react to WHAT YOU SEE on this screen. Check INSTALLED_APPS "
+            "before claiming an app is missing. Do NOT click anything in "
+            "FORBIDDEN_TARGETS. Respond with ONE JSON decision now."
         )
 
         raw = self.llm.complete_json(
@@ -539,6 +674,118 @@ class Executor:
             return AgentDecision.model_validate(raw)
         except ValidationError as exc:
             raise LLMResponseError(f"Invalid decision schema: {exc}") from exc
+
+    # --------------------------------------------------------------------- #
+    # Guards & bootstrap
+    # --------------------------------------------------------------------- #
+
+    def _maybe_bootstrap_goal_app(
+        self, plan: Plan, screen_ctx: ScreenContext,
+    ) -> None:
+        """On iteration 1 at the launcher, try to open the goal app directly."""
+        if not screen_ctx.is_launcher:
+            return
+        goal_l = plan.goal.lower()
+        keywords: List[str] = []
+        if "gmail" in goal_l or "google mail" in goal_l:
+            keywords = ["gmail", "google mail"]
+        elif "whatsapp" in goal_l:
+            keywords = ["whatsapp"]
+        elif "chrome" in goal_l:
+            keywords = ["chrome"]
+        if not keywords:
+            return
+
+        for name in keywords:
+            pkg = self.device.resolve_package(name)
+            if not pkg:
+                continue
+            if self.device.open_app(pkg):
+                self.on_log(f"▸ Bootstrapped: launched {name} ({pkg})")
+                return
+            self.on_log(
+                f"▸ {pkg} is listed but launch failed — will try UI navigation."
+            )
+        if "gmail" in goal_l:
+            self.on_log(
+                "▸ Gmail not launchable — may be absent on this device; "
+                "use Samsung Internet / Chrome from INSTALLED_APPS or Play Store."
+            )
+
+    def _guard_decision(
+        self,
+        decision: AgentDecision,
+        screen_ctx: ScreenContext,
+        recent: List[ActionRecord],
+    ) -> AgentDecision:
+        """Patch obviously wasteful LLM choices before we act."""
+        act = decision.action
+        kind = act.kind
+        target = (act.target or "").lower()
+
+        # Notification shade: BACK toggles it — use HOME.
+        if screen_ctx.is_notification_shade and kind in ("back", "press"):
+            if kind == "back" or target == "back":
+                self.on_log("  ↻ notification shade → HOME (not BACK)")
+                decision.action = ActionSpec(
+                    kind="press", target="home", target_kind="key",
+                )
+                return decision
+
+        # Launcher: consecutive BACK does nothing useful — use HOME once.
+        if screen_ctx.is_launcher and kind in ("back", "press") and target == "back":
+            if recent and recent[-1].decision.action.kind in ("back", "press"):
+                self.on_log("  ↻ launcher: repeated BACK → HOME")
+                decision.action = ActionSpec(
+                    kind="press", target="home", target_kind="key",
+                )
+                return decision
+
+        # Launcher: invalid scroll_to → swipe.
+        if screen_ctx.is_launcher and kind == "scroll_to":
+            t = (act.target or "").strip()
+            if ":" in t or t.isdigit() or "workspace" in t.lower():
+                self.on_log("  ↻ launcher scroll_to → swipe left")
+                decision.action = ActionSpec(
+                    kind="swipe", target="left", target_kind="key",
+                )
+                return decision
+
+        # Repeated BACK/PRESS on launcher/shade → HOME.
+        if len(recent) >= 3 and (screen_ctx.is_launcher or screen_ctx.is_notification_shade):
+            last3 = recent[-3:]
+            if all(
+                r.decision.action.kind in ("back", "press")
+                for r in last3
+            ):
+                self.on_log("  ↻ back-loop detected → HOME")
+                decision.action = ActionSpec(
+                    kind="press", target="home", target_kind="key",
+                )
+                return decision
+
+        # Failed open_app retries: suggest drawer once.
+        failed_opens = [
+            r for r in recent[-5:]
+            if r.decision.action.kind == "open_app" and not r.success
+        ]
+        if (
+            screen_ctx.is_launcher
+            and len(failed_opens) >= 2
+            and kind == "open_app"
+        ):
+            self.on_log("  ↻ repeated open_app failures → open app drawer")
+            if self.device.open_app_drawer():
+                decision.action = ActionSpec(
+                    kind="wait", target="", target_kind="none",
+                )
+            else:
+                decision.action = ActionSpec(
+                    kind="swipe", target="left", target_kind="key",
+                )
+            return decision
+
+        return decision
 
     # --------------------------------------------------------------------- #
     # Acting
@@ -574,8 +821,13 @@ class Executor:
         if kind == "scroll_to":
             if not t:
                 raise ActionExecutionError("scroll_to requires a target text")
-            if not self.device.scroll_to_text(t):
+            if not self.device.smart_scroll(t, kt):
                 raise ActionExecutionError(f"scroll_to({t}) failed")
+            return
+        if kind == "swipe":
+            direction = (t or "left").lower()
+            if not self.device.swipe(direction):
+                raise ActionExecutionError(f"swipe({direction}) failed")
             return
         if kind == "click":
             if not t:

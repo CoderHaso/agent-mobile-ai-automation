@@ -29,6 +29,7 @@ class ModelInfo:
     output_per_m: float    # USD per 1M output tokens
     context_k: int         # context window (in K tokens)
     notes: str = ""
+    supports_vision: bool = False   # can accept image_url in chat messages
 
     # ---- presentation helpers -------------------------------------------
     @staticmethod
@@ -166,6 +167,7 @@ DEEPSEEK_MODELS: List[ModelInfo] = [
         quality=4, speed=4,
         input_per_m=0.14, output_per_m=0.28, context_k=1000,
         notes="DEFAULT. 1M context, supports thinking + non-thinking modes. Native Vision.",
+        supports_vision=True,
     ),
     ModelInfo(
         provider="deepseek",
@@ -190,6 +192,7 @@ DEEPSEEK_MODELS: List[ModelInfo] = [
         quality=5, speed=3,
         input_per_m=0.435, output_per_m=0.87, context_k=1000,
         notes="Frontier-tier reasoning (75% off through May 31, 2026). Native Vision.",
+        supports_vision=True,
     ),
 ]
 
