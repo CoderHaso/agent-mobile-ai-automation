@@ -172,11 +172,10 @@ Use resource_id when present, otherwise text, otherwise content_desc.
 
 ═════════════════════════ FORM VALIDATION & ERRORS ══════════════════
 If you see an error (e.g. 'Username taken'), you must type a new value or click a suggested username. 
-CRITICAL RULE: Typing a new value or clicking a suggestion WILL NOT make the error disappear! 
-Your VERY NEXT ACTION must ALWAYS be clicking 'Next' or 'Submit' to validate the new input.
-NEVER type into a field, and then immediately type into it again.
-NEVER select a suggested username, and then immediately type a new one. 
-ALWAYS click 'Next' after altering form data!
+CRITICAL RULE: Typing a new value or clicking a suggestion WILL NOT make the error disappear visually until you validate it!
+1. After typing a new value or selecting a suggestion, your VERY NEXT ACTION must ALWAYS be clicking 'Next' or 'Submit'.
+2. If the error STILL appears AFTER you have clicked 'Next', then you must try typing a different value, followed by clicking 'Next' again.
+NEVER type into a field twice in a row without clicking 'Next' in between.
 
 ═════════════════════════ INPUTS PER ITERATION ══════════════════════
   • GOAL              the high-level user objective (THIS is what matters)
