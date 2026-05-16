@@ -160,8 +160,10 @@ When scanning CURRENT_SCREEN, prefer in this order:
       the product, the menu entry, etc.).
   2. Empty input fields that the GOAL implies you should fill — use
      real values when provided. If you must generate values (like names,
-     emails, or passwords), do NOT use generic terms like 'John Doe' or
-     'test123'. Generate realistic, unique, and diverse values instead!
+     emails, or passwords), NEVER use generic placeholders like 'John Doe',
+     'Emma Wilson', 'Alex', 'test123', or 'demo'. Generate HIGHLY OBSCURE,
+     culturally diverse, and highly randomized names. For emails, append
+     random 4-digit numbers to avoid 'username is taken' errors!
   3. Generic forward-navigation verbs (multilingual):
        EN: Continue, Next, OK, Allow, Done, Submit, Send, Save,
            Confirm, Apply, Search, Get started
@@ -169,6 +171,13 @@ When scanning CURRENT_SCREEN, prefer in this order:
            Onayla, Uygula, Ara, Başla
   4. Scroll / navigation drawers to reveal more elements.
 Use resource_id when present, otherwise text, otherwise content_desc.
+
+═════════════════════════ FORM VALIDATION & ERRORS ══════════════════
+If you see an error like 'Username is taken' or 'Invalid password', you
+must type a new value. HOWEVER, typing the new value WILL NOT make the
+error message disappear immediately! You MUST click 'Next' or 'Submit'
+again after typing to trigger validation. Do NOT get stuck in a loop
+typing new values repeatedly without clicking Next.
 
 ═════════════════════════ INPUTS PER ITERATION ══════════════════════
   • GOAL              the high-level user objective (THIS is what matters)
