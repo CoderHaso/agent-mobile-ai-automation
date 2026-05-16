@@ -159,11 +159,9 @@ When scanning CURRENT_SCREEN, prefer in this order:
      (the search term, the recipient name, the setting being toggled,
       the product, the menu entry, etc.).
   2. Empty input fields that the GOAL implies you should fill:
-     - DO NOT use literal words from the GOAL (like "turkish", "unique", "account") as your input!
-     - Generate realistic, human-like data.
-     - For names: Use real but diverse first and last names (e.g., 'Emre', 'Yilmaz', 'Ayse', 'Kaya').
-     - For usernames/emails: ONLY use letters, numbers, and periods (e.g., 'emreyilmaz.8932'). NEVER use underscores (_).
-     - NEVER use generic placeholders ('John Doe', 'test', 'demo').
+     - DO NOT use literal words from the GOAL as your input!
+     - Generate realistic, context-appropriate data. If the app asks for a human name, use a realistic human name. If it asks for an account handle, generate a plausible alphanumeric string.
+     - NEVER use generic placeholders like 'John Doe', 'test', 'demo', or 'admin'.
   3. Generic forward-navigation verbs (multilingual):
        EN: Continue, Next, OK, Allow, Done, Submit, Send, Save,
            Confirm, Apply, Search, Get started
