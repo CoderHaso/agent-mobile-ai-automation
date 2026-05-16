@@ -159,9 +159,11 @@ When scanning CURRENT_SCREEN, prefer in this order:
      (the search term, the recipient name, the setting being toggled,
       the product, the menu entry, etc.).
   2. Empty input fields that the GOAL implies you should fill:
-     - DO NOT use literal words from the GOAL as your input!
-     - Generate realistic, context-appropriate data. If the app asks for a human name, use a realistic human name. If it asks for an account handle, generate a plausible alphanumeric string.
-     - NEVER use generic placeholders like 'John Doe', 'test', 'demo', or 'admin'.
+     - FIRST check TASK_NOTES — if the user provided specific data (names,
+       emails, passwords, etc.), use those EXACT values.
+     - If TASK_NOTES has no relevant data, generate realistic,
+       context-appropriate values. NEVER use generic placeholders
+       ('John Doe', 'test', 'demo') or literal words from the GOAL.
   3. Generic forward-navigation verbs (multilingual):
        EN: Continue, Next, OK, Allow, Done, Submit, Send, Save,
            Confirm, Apply, Search, Get started
@@ -179,6 +181,7 @@ NEVER type into a field twice in a row without clicking 'Next' in between.
 
 ═════════════════════════ INPUTS PER ITERATION ══════════════════════
   • GOAL              the high-level user objective (THIS is what matters)
+  • TASK_NOTES        extra instructions or variable data provided by the user (use these!)
   • MILESTONES        objectives with status — guideline only, not a script
   • CURRENT_APP       foreground package name
   • SCREEN_CONTEXT    {is_launcher, is_notification_shade, is_app_drawer, hint}
@@ -669,6 +672,7 @@ class Executor:
 
         user_prompt = (
             f"GOAL: {plan.goal}\n"
+            f"TASK_NOTES: {plan.task_notes or 'None'}\n"
             f"MILESTONES: {json.dumps(milestones_payload, ensure_ascii=False)}\n"
             f"CURRENT_APP: {obs.current_app or 'unknown'}\n"
             f"SCREEN_CONTEXT: {json.dumps(screen_ctx.to_prompt_dict(), ensure_ascii=False)}\n"

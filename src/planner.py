@@ -141,6 +141,7 @@ class PlanStep(BaseModel):
 
 class Plan(BaseModel):
     goal: str
+    task_notes: Optional[str] = None
     steps: List[PlanStep] = Field(default_factory=list)
     error: Optional[str] = None
 

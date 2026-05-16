@@ -35,6 +35,7 @@ from ..task_library import TaskLibrary
 from .devices_tab import DevicesTab
 from .plan_tab import PlanTab
 from .run_tab import RunTab
+from .teach_tab import TeachTab
 from .style import DARK_QSS
 from .workers import LLMConnectWorker
 
@@ -53,6 +54,8 @@ class MainWindow(QMainWindow):
         self._llm: Optional[LLMClient] = None
         self._llm_worker: Optional[LLMConnectWorker] = None
         self._library = TaskLibrary()
+        from ..taught_task import TaughtTaskLibrary
+        self._taught_library = TaughtTaskLibrary()
 
         self._build_ui()
         self._build_statusbar()
@@ -72,12 +75,15 @@ class MainWindow(QMainWindow):
         self.devices_tab = DevicesTab()
         self.plan_tab = PlanTab(library=self._library)
         self.run_tab = RunTab(library=self._library)
+        self.teach_tab = TeachTab()
 
         self.tabs.addTab(self.devices_tab, "1 · Devices")
         self.tabs.addTab(self.plan_tab,    "2 · Plan")
         self.tabs.addTab(self.run_tab,     "3 · Run")
+        self.tabs.addTab(self.teach_tab,   "4 · Teach")
         self.tabs.setTabEnabled(1, False)
         self.tabs.setTabEnabled(2, False)
+        self.tabs.setTabEnabled(3, False)
 
         layout.addWidget(self.tabs)
         self.setCentralWidget(central)
@@ -106,6 +112,10 @@ class MainWindow(QMainWindow):
         self.run_tab.finished_with_results.connect(self._on_run_finished)
         self.run_tab.macro_saved.connect(self._on_macro_saved)
 
+        self.teach_tab.log.connect(self._set_status)
+        self.teach_tab.task_saved.connect(self._on_taught_task_saved)
+        self.teach_tab.run_taught_task.connect(self._on_run_taught_task)
+
     # ---- bootstrapping ------------------------------------------------- #
 
     def _kick_off_llm(self) -> None:
@@ -122,6 +132,7 @@ class MainWindow(QMainWindow):
         self.plan_tab.attach_llm(llm)
         if self._device is not None:
             self.run_tab.attach_runtime(self._device, llm)
+            self.teach_tab.attach_runtime(self._device, llm)
 
     def _on_llm_failed(self, msg: str) -> None:
         self.lbl_llm.setText("LLM: ERROR")
@@ -151,6 +162,7 @@ class MainWindow(QMainWindow):
         self.plan_tab.attach_llm(llm)
         if self._device is not None:
             self.run_tab.attach_runtime(self._device, llm)
+            self.teach_tab.attach_runtime(self._device, llm)
         self._set_status(f"Switched LLM → {llm.describe()}")
 
     # ---- transitions --------------------------------------------------- #
@@ -165,9 +177,11 @@ class MainWindow(QMainWindow):
         )
         self.lbl_device.setText(f"Device: {label}")
         self.tabs.setTabEnabled(1, True)
+        self.tabs.setTabEnabled(3, True)  # Teach tab
         self.tabs.setCurrentIndex(1)
         if self._llm is not None:
             self.run_tab.attach_runtime(dm, self._llm)
+            self.teach_tab.attach_runtime(dm, self._llm)
         try:
             n = len(dm.list_installed_apps(force=True))
             self._set_status(f"Device ready — {n} installed app(s) indexed via ADB.")
@@ -198,6 +212,39 @@ class MainWindow(QMainWindow):
         # can see (and reuse) the macro they just kept.
         self.plan_tab.refresh_library()
         self._set_status("Macro saved to library.")
+
+    def _on_taught_task_saved(self, _task) -> None:
+        self._set_status(f"Taught task saved: {_task.name}")
+
+    def _on_run_taught_task(self, task) -> None:
+        """Build a Plan from a TaughtTask and start execution."""
+        if self._device is None or self._llm is None:
+            QMessageBox.warning(
+                self, "Not ready",
+                "Device or LLM is not initialized yet.",
+            )
+            return
+
+        from ..planner import Plan, PlanStep
+        steps = []
+        for s in task.steps:
+            steps.append(PlanStep(
+                step_id=s.step_index,
+                action_description=s.instruction,
+                expected_outcome=f"Step {s.step_index} is completed",
+                is_optional=False,
+                status="pending",
+            ))
+
+        plan = Plan(
+            goal=task.name,
+            task_notes=task.notes or None,
+            steps=steps,
+        )
+
+        self.tabs.setTabEnabled(2, True)
+        self.tabs.setCurrentIndex(2)
+        self.run_tab.start_with_plan(plan, use_vision=False)
 
     # ---- helpers ------------------------------------------------------- #
 
