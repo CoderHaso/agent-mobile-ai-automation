@@ -889,6 +889,9 @@ class Executor:
         if kind == "type":
             if not val:
                 raise ActionExecutionError("type requires input_value")
+            if t and kt == "index":
+                self._dispatch_click(t, kt)
+                self.device.wait(0.5)
             if not self.device.type_into(t or "", val):
                 raise ActionExecutionError(f"type into {t!r} failed")
             return
@@ -1054,8 +1057,13 @@ class Executor:
         thought = (d.thought or "").strip().replace("\n", " ")
         screen = (d.screen_summary or "").strip().replace("\n", " ")
         screen_tag = f"[{screen}] " if screen else ""
+        
+        action_str = f"{d.action.kind}→{d.action.target!r}"
+        if d.action.kind == "type":
+            action_str += f" val={d.action.input_value!r}"
+            
         self.on_log(
             f"#{it:02d}  app={obs.current_app or '?'}  active={active}  "
-            f"{screen_tag}{recovery_tag}{d.action.kind}→{d.action.target!r}  "
+            f"{screen_tag}{recovery_tag}{action_str}  "
             f"({thought})"
         )

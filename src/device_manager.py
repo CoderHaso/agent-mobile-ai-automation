@@ -243,6 +243,7 @@ class DeviceManager:
                 log.warning("type_into selector failed: %s", exc)
         # Fallback: type into the currently focused field.
         try:
+            self.d.clear_text()
             self.d.send_keys(value)
             return True
         except Exception:
