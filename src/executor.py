@@ -158,12 +158,12 @@ When scanning CURRENT_SCREEN, prefer in this order:
   1. Elements whose label DIRECTLY matches the GOAL's subject
      (the search term, the recipient name, the setting being toggled,
       the product, the menu entry, etc.).
-  2. Empty input fields that the GOAL implies you should fill — use
-     real values when provided. If you must generate values (like names,
-     emails, or passwords), NEVER use generic placeholders like 'John Doe',
-     'Emma Wilson', 'Alex', 'test123', or 'demo'. Generate HIGHLY OBSCURE,
-     culturally diverse, and highly randomized names. For emails, append
-     random 4-digit numbers to avoid 'username is taken' errors!
+  2. Empty input fields that the GOAL implies you should fill:
+     - DO NOT use literal words from the GOAL (like "turkish", "unique", "account") as your input!
+     - Generate realistic, human-like data.
+     - For names: Use real but diverse first and last names (e.g., 'Emre', 'Yilmaz', 'Ayse', 'Kaya').
+     - For usernames/emails: ONLY use letters, numbers, and periods (e.g., 'emreyilmaz.8932'). NEVER use underscores (_).
+     - NEVER use generic placeholders ('John Doe', 'test', 'demo').
   3. Generic forward-navigation verbs (multilingual):
        EN: Continue, Next, OK, Allow, Done, Submit, Send, Save,
            Confirm, Apply, Search, Get started
