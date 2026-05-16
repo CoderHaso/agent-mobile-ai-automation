@@ -133,8 +133,9 @@ When scanning CURRENT_SCREEN, prefer in this order:
      (the search term, the recipient name, the setting being toggled,
       the product, the menu entry, etc.).
   2. Empty input fields that the GOAL implies you should fill — use
-     real values when provided, otherwise placeholders like
-     <USER_NAME>, <SEARCH_TERM>, <MESSAGE>.
+     real values when provided. If you must generate values (like names,
+     emails, or passwords), do NOT use generic terms like 'John Doe' or
+     'test123'. Generate realistic, unique, and diverse values instead!
   3. Generic forward-navigation verbs (multilingual):
        EN: Continue, Next, OK, Allow, Done, Submit, Send, Save,
            Confirm, Apply, Search, Get started
