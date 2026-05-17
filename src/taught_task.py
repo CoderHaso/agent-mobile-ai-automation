@@ -43,6 +43,10 @@ class TaughtStep(BaseModel):
     verified: bool = False          # user confirmed it works
     last_result: str = ""           # "success" | "failed" | "" (untested)
     last_error: str = ""            # error details if failed
+    known_issues: List[str] = Field(
+        default_factory=list,
+        description="User-reported problems to avoid on retest (from Stop dialog)",
+    )
 
 
 class TaughtTask(BaseModel):
@@ -50,6 +54,10 @@ class TaughtTask(BaseModel):
 
     name: str = ""
     notes: str = ""                 # free-form context for the AI
+    known_issues: List[str] = Field(
+        default_factory=list,
+        description="Task-wide issues to avoid (fed to the AI on every test)",
+    )
     loop_count: int = 1             # how many times to repeat
     steps: List[TaughtStep] = Field(default_factory=list)
     created_at: float = Field(default_factory=time.time)

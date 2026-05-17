@@ -182,6 +182,7 @@ NEVER type into a field twice in a row without clicking 'Next' in between.
 ═════════════════════════ INPUTS PER ITERATION ══════════════════════
   • GOAL              the high-level user objective (THIS is what matters)
   • TASK_NOTES        extra instructions or variable data provided by the user (use these!)
+  • KNOWN_ISSUES      mistakes the user flagged on prior runs — DO NOT repeat them
   • MILESTONES        objectives with status — guideline only, not a script
   • CURRENT_APP       foreground package name
   • SCREEN_CONTEXT    {is_launcher, is_notification_shade, is_app_drawer, hint}
@@ -224,6 +225,13 @@ Action rules:
     app is stuck, frozen, or you need to restart it from scratch. The app
     will be killed and you can re-launch it cleanly with `open_app`.
   • For `index` target_kind, target is the integer index of the element from CURRENT_SCREEN. Use this as a bulletproof fallback when an element has no clear text label or content_desc.
+  • For `type` actions:
+      - Put the ENTIRE string to type in `input_value` ONLY (e.g. "emre.ankara.a1b2").
+      - Set `target` to "" and `target_kind` to "none" when the field is already focused.
+      - If the field is not focused, use `target_kind` "index" with the EditText index,
+        then the system will tap it and type `input_value`.
+      - NEVER put typed text in `target`. NEVER use "type" as target or input_value.
+      - NEVER use a single digit (e.g. "8") as target — that types the wrong character.
   • Use `done` when goal_complete=true.
   • Use `give_up` only after multiple failed attempts AND no plausible
     element exists AND scrolling/back also failed.
@@ -327,6 +335,7 @@ class ExecutorConfig:
     max_elements_in_prompt: int = 70
     use_vision: bool = False           # send screenshot to LLM (user toggle)
     skip_clean_start: bool = False     # skip Step 0 home+force-stop (for teach-mode)
+    known_issues: List[str] = field(default_factory=list)  # teach-mode user feedback
 
 
 # --------------------------------------------------------------------------- #
@@ -676,6 +685,7 @@ class Executor:
         user_prompt = (
             f"GOAL: {plan.goal}\n"
             f"TASK_NOTES: {plan.task_notes or 'None'}\n"
+            f"KNOWN_ISSUES: {json.dumps(self.config.known_issues or [], ensure_ascii=False)}\n"
             f"MILESTONES: {json.dumps(milestones_payload, ensure_ascii=False)}\n"
             f"CURRENT_APP: {obs.current_app or 'unknown'}\n"
             f"SCREEN_CONTEXT: {json.dumps(screen_ctx.to_prompt_dict(), ensure_ascii=False)}\n"
@@ -903,10 +913,21 @@ class Executor:
         if kind == "type":
             if not val:
                 raise ActionExecutionError("type requires input_value")
-            if t and kt == "index":
-                self._dispatch_click(t, kt)
-                self.device.wait(0.5)
-            if not self.device.type_into(t or "", val):
+            if val.strip().lower() in ("type", "click", "press", "text"):
+                raise ActionExecutionError(
+                    f"refusing to type literal action word: {val!r}"
+                )
+            if t and t.strip().lower() == "type":
+                t = ""
+                kt = "none"
+            if kt == "index" and t:
+                if not self._dispatch_click(t, "index"):
+                    raise ActionExecutionError(f"focus field index {t!r} failed")
+                self.device.wait(0.4)
+                if not self.device.type_into_focused(val):
+                    raise ActionExecutionError(f"type into focused field failed")
+                return
+            if not self.device.type_into(t or "", val, target_kind=kt):
                 raise ActionExecutionError(f"type into {t!r} failed")
             return
 
@@ -1072,9 +1093,11 @@ class Executor:
         screen = (d.screen_summary or "").strip().replace("\n", " ")
         screen_tag = f"[{screen}] " if screen else ""
         
-        action_str = f"{d.action.kind}→{d.action.target!r}"
         if d.action.kind == "type":
-            action_str += f" val={d.action.input_value!r}"
+            tgt = d.action.target or "(focused)"
+            action_str = f"type→{tgt!r} val={d.action.input_value!r}"
+        else:
+            action_str = f"{d.action.kind}→{d.action.target!r}"
             
         self.on_log(
             f"#{it:02d}  app={obs.current_app or '?'}  active={active}  "

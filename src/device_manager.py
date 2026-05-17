@@ -222,32 +222,91 @@ class DeviceManager:
             return True
         return False
 
+    def type_into_focused(self, value: str) -> bool:
+        """Type into the currently focused EditText (clear first)."""
+        if not value:
+            return False
+        try:
+            focused = self.d(focused=True)
+            if focused.exists:
+                try:
+                    focused.clear_text()
+                except Exception:
+                    pass
+                focused.set_text(value)
+                return True
+        except Exception as exc:
+            log.debug("type_into_focused (focused=True) failed: %s", exc)
+
+        try:
+            edit = self.d(className="android.widget.EditText", focused=True)
+            if edit.exists:
+                try:
+                    edit.clear_text()
+                except Exception:
+                    pass
+                edit.set_text(value)
+                return True
+        except Exception as exc:
+            log.debug("type_into_focused (EditText) failed: %s", exc)
+
+        try:
+            self.d.clear_text()
+            self.d.send_keys(value)
+            return True
+        except Exception as exc:
+            log.warning("type_into_focused fallback failed: %s", exc)
+            return False
+
     def type_into(
         self,
         target: str,
         value: str,
         timeout: float = 5.0,
+        *,
+        target_kind: str = "text",
     ) -> bool:
-        """Type into a field identified by resourceId or visible text/desc."""
+        """Type into a field. Prefer focused field when target is empty."""
+        if not value:
+            return False
+
+        t = (target or "").strip()
+        kind = (target_kind or "text").lower().strip()
+
+        # Field already focused — do not match spurious text like "8" or "type".
+        if not t or kind in ("none", "focused"):
+            return self.type_into_focused(value)
+
+        if kind == "index":
+            return False  # caller must click index first, then type_into_focused
+
+        # Single character / digit as text target is almost always wrong.
+        if len(t) <= 2 and t.isdigit():
+            return self.type_into_focused(value)
+
+        if t.lower() in ("type", "click", "text", "input"):
+            return self.type_into_focused(value)
+
         selectors = [
-            self.d(resourceId=target),
-            self.d(text=target),
-            self.d(description=target),
+            self.d(resourceId=t),
+            self.d(description=t),
         ]
+        if len(t) > 2:
+            selectors.append(self.d(text=t))
+
         for sel in selectors:
             try:
                 if sel.wait(timeout=timeout):
+                    try:
+                        sel.clear_text()
+                    except Exception:
+                        pass
                     sel.set_text(value)
                     return True
             except Exception as exc:
                 log.warning("type_into selector failed: %s", exc)
-        # Fallback: type into the currently focused field.
-        try:
-            self.d.clear_text()
-            self.d.send_keys(value)
-            return True
-        except Exception:
-            return False
+
+        return self.type_into_focused(value)
 
     def press(self, key: str) -> bool:
         """Press a hardware/system key (back, home, enter, …)."""

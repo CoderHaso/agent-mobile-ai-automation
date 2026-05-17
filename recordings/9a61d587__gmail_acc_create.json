@@ -1,0 +1,700 @@
+{
+  "schema_version": 1,
+  "goal": "gmail acc create",
+  "created_at": 1778975074.9836688,
+  "llm_provider": "deepseek",
+  "llm_model": "deepseek-v4-flash",
+  "plan_milestones": [
+    {
+      "step_id": 1,
+      "action_description": "Go to home screen and clean state (force-stop relevant apps)",
+      "expected_outcome": "Step 1 is completed",
+      "is_optional": false
+    },
+    {
+      "step_id": 2,
+      "action_description": "ayarlardan hesaplar bölümünü aç",
+      "expected_outcome": "Step 2 is completed",
+      "is_optional": false
+    },
+    {
+      "step_id": 3,
+      "action_description": "hesap ekleye tıkla",
+      "expected_outcome": "Step 3 is completed",
+      "is_optional": false
+    },
+    {
+      "step_id": 4,
+      "action_description": "google ı seç",
+      "expected_outcome": "Step 4 is completed",
+      "is_optional": false
+    },
+    {
+      "step_id": 5,
+      "action_description": "hesap oluşturun butonuna tıkla ve kişisel kullanımım içini seç",
+      "expected_outcome": "Step 5 is completed",
+      "is_optional": false
+    },
+    {
+      "step_id": 6,
+      "action_description": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "expected_outcome": "Step 6 is completed",
+      "is_optional": false
+    },
+    {
+      "step_id": 7,
+      "action_description": "kullanıcı adı bölümü otomatik seçili geliyor notlardaki yönergeye göre kullanıcı adı oluştur direkt yaz ve next butonuna bas eğer kullanılmış derse aynı yöntemle tekrar oluştur ve sonrakiye basarak kullanılmış mı kontrolünü yap",
+      "expected_outcome": "Step 7 is completed",
+      "is_optional": false
+    }
+  ],
+  "actions": [
+    {
+      "step_index": 1,
+      "milestone_id": 1,
+      "milestone_text": "Go to home screen and clean state (force-stop relevant apps)",
+      "screen_signature": "9699c084704ce770",
+      "screen_summary": "Home launcher with clock and few apps",
+      "action_kind": "swipe",
+      "target": "up",
+      "target_kind": "key",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Appium Settings",
+        "WA Business",
+        "Acurast Processor",
+        "Ara"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 2,
+      "milestone_id": 1,
+      "milestone_text": "Go to home screen and clean state (force-stop relevant apps)",
+      "screen_signature": "433ddc401ea7fa77",
+      "screen_summary": "Home launcher with app drawer page 1/2",
+      "action_kind": "swipe",
+      "target": "left",
+      "target_kind": "key",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "02:38"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 3,
+      "milestone_id": 1,
+      "milestone_text": "Go to home screen and clean state (force-stop relevant apps)",
+      "screen_signature": "7e0330431db3c06f",
+      "screen_summary": "Home launcher with app icons",
+      "action_kind": "click",
+      "target": "Ara",
+      "target_kind": "text",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Kapat"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 4,
+      "milestone_id": 1,
+      "milestone_text": "Go to home screen and clean state (force-stop relevant apps)",
+      "screen_signature": "6decccf3d501f283",
+      "screen_summary": "Galaxy Finder search overlay",
+      "action_kind": "press",
+      "target": "back",
+      "target_kind": "key",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Tuşlar",
+        "Gece",
+        "GözRahatlığı",
+        "Güvenlik"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 5,
+      "milestone_id": 1,
+      "milestone_text": "Go to home screen and clean state (force-stop relevant apps)",
+      "screen_signature": "dd17cab6e00e9f06",
+      "screen_summary": "Galaxy Finder search overlay",
+      "action_kind": "click",
+      "target": "Ana sayfa",
+      "target_kind": "content_desc",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "SOYO",
+        "DesiLive"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 6,
+      "milestone_id": 1,
+      "milestone_text": "Go to home screen and clean state (force-stop relevant apps)",
+      "screen_signature": "5045aa9ea6aeb1a5",
+      "screen_summary": "Home launcher with clock and apps",
+      "action_kind": "swipe",
+      "target": "up",
+      "target_kind": "key",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Appium Settings",
+        "WA Business",
+        "Acurast Processor",
+        "Ara"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 7,
+      "milestone_id": 2,
+      "milestone_text": "ayarlardan hesaplar bölümünü aç",
+      "screen_signature": "8c6bb616c2e29d1e",
+      "screen_summary": "Launcher home screen with apps",
+      "action_kind": "click",
+      "target": "14",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Kapat",
+        "Daha fazla göster",
+        "Önerilen ayarlar",
+        "Tuşlar"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 8,
+      "milestone_id": 2,
+      "milestone_text": "ayarlardan hesaplar bölümünü aç",
+      "screen_signature": "163d1cbcc9a52e5f",
+      "screen_summary": "Galaxy Finder search keyboard",
+      "action_kind": "press",
+      "target": "back",
+      "target_kind": "key",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Tuşlar",
+        "Gece",
+        "GözRahatlığı",
+        "Güvenlik"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 9,
+      "milestone_id": 2,
+      "milestone_text": "ayarlardan hesaplar bölümünü aç",
+      "screen_signature": "bb31e7ae503825a6",
+      "screen_summary": "Galaxy Finder search screen",
+      "action_kind": "type",
+      "target": "",
+      "target_kind": "none",
+      "input_value": "Ayarlar",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Samsung",
+        "Google",
+        "OneDrive",
+        "Play Store"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 10,
+      "milestone_id": 2,
+      "milestone_text": "ayarlardan hesaplar bölümünü aç",
+      "screen_signature": "35168a1c050e382a",
+      "screen_summary": "Home launcher with apps grid",
+      "action_kind": "click",
+      "target": "19",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "com.android.settings:id/recycler_view",
+        "Samsung account",
+        "Profil  •  Güvenlik  •  Uygulamalar",
+        "Bağlantılar"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 11,
+      "milestone_id": 2,
+      "milestone_text": "ayarlardan hesaplar bölümünü aç",
+      "screen_signature": "56f44ea49d594640",
+      "screen_summary": "Settings main menu top items",
+      "action_kind": "swipe",
+      "target": "up",
+      "target_kind": "key",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "02:40",
+        "Ana ekran ve kilit ekranı duvar kağıdı",
+        "Temalar",
+        "Temalar  •  Duvar Kağıtları  •  Simgeler"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 12,
+      "milestone_id": 2,
+      "milestone_text": "ayarlardan hesaplar bölümünü aç",
+      "screen_signature": "9bf5835420b57306",
+      "screen_summary": "Settings list, need to scroll more",
+      "action_kind": "swipe",
+      "target": "up",
+      "target_kind": "key",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Konum izinleri  •  Konum istekleri",
+        "Google",
+        "Google servisleri",
+        "Hesaplar ve yedekleme"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 13,
+      "milestone_id": 3,
+      "milestone_text": "hesap ekleye tıkla",
+      "screen_signature": "3292f8854165c4f6",
+      "screen_summary": "Settings main menu showing accounts options",
+      "action_kind": "click",
+      "target": "24",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Yukarı gezinir",
+        "Hesapları yönet",
+        "Samsung Cloud",
+        "Veri yedekle"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 14,
+      "milestone_id": 3,
+      "milestone_text": "hesap ekleye tıkla",
+      "screen_signature": "9b06e50286032f54",
+      "screen_summary": "Accounts and backup settings",
+      "action_kind": "click",
+      "target": "11",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "com.android.settings:id/view_pager",
+        "bartutahta8973@gmail.com",
+        "Google",
+        "husamhassain95@gmail.com"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 15,
+      "milestone_id": 3,
+      "milestone_text": "hesap ekleye tıkla",
+      "screen_signature": "92c36341ae8579e3",
+      "screen_summary": "Settings accounts management screen",
+      "action_kind": "click",
+      "target": "24",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Samsung account",
+        "Exchange",
+        "Facebook",
+        "Kişisel (IMAP erişimi)"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 16,
+      "milestone_id": 4,
+      "milestone_text": "google ı seç",
+      "screen_signature": "12d23ca944613261",
+      "screen_summary": "Account type selection screen",
+      "action_kind": "click",
+      "target": "10",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [],
+      "is_recovery": false
+    },
+    {
+      "step_index": 17,
+      "milestone_id": 5,
+      "milestone_text": "hesap oluşturun butonuna tıkla ve kişisel kullanımım içini seç",
+      "screen_signature": "f70acde4dc81d96d",
+      "screen_summary": "Google sign-in screen",
+      "action_kind": "click",
+      "target": "8",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Kişisel kullanımım için",
+        "İşte veya işletmemde kullanmak için"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 18,
+      "milestone_id": 5,
+      "milestone_text": "hesap oluşturun butonuna tıkla ve kişisel kullanımım içini seç",
+      "screen_signature": "a785874cc38f451b",
+      "screen_summary": "Create account dropdown with options",
+      "action_kind": "click",
+      "target": "10",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Yükleniyor"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 19,
+      "milestone_id": 6,
+      "milestone_text": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "screen_signature": "7419481cdd668b7d",
+      "screen_summary": "Google Hesabı oluştur - ad girişi",
+      "action_kind": "type",
+      "target": "5",
+      "target_kind": "index",
+      "input_value": "Emre",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Emre",
+        "Shift kapalı.",
+        "Sil",
+        "Sembol"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 20,
+      "milestone_id": 6,
+      "milestone_text": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "screen_signature": "77e02edfb532349a",
+      "screen_summary": "Google account creation name entry",
+      "action_kind": "type",
+      "target": "6",
+      "target_kind": "index",
+      "input_value": "yılmaz",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "yılmaz",
+        "Git"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 21,
+      "milestone_id": 6,
+      "milestone_text": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "screen_signature": "18b5c3b9de6f1803",
+      "screen_summary": "Google account creation name entry",
+      "action_kind": "click",
+      "target": "Sonraki",
+      "target_kind": "text",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Yükleniyor"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 22,
+      "milestone_id": null,
+      "milestone_text": "",
+      "screen_signature": "3fac49d3800a8d42",
+      "screen_summary": "Birth date screen",
+      "action_kind": "type",
+      "target": "5",
+      "target_kind": "index",
+      "input_value": "15",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "15",
+        "ABC",
+        "DEF",
+        "Sil"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 23,
+      "milestone_id": 6,
+      "milestone_text": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "screen_signature": "c32fc00d49268e0e",
+      "screen_summary": "Birth date and gender entry",
+      "action_kind": "click",
+      "target": "7",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Git"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 24,
+      "milestone_id": 7,
+      "milestone_text": "kullanıcı adı bölümü otomatik seçili geliyor notlardaki yönergeye göre kullanıcı adı oluştur direkt yaz ve next butonuna bas eğer kullanılmış derse aynı yöntemle tekrar oluştur ve sonrakiye basarak kullanılmış mı kontrolünü yap",
+      "screen_signature": "c32fc00d49268e0e",
+      "screen_summary": "Birth date and gender screen",
+      "action_kind": "click",
+      "target": "6",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Ay",
+        "Ocak",
+        "Şubat",
+        "Mart"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 25,
+      "milestone_id": 6,
+      "milestone_text": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "screen_signature": "e1d0490b6e951257",
+      "screen_summary": "Birth date entry with month list",
+      "action_kind": "click",
+      "target": "13",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [],
+      "is_recovery": false
+    },
+    {
+      "step_index": 26,
+      "milestone_id": 7,
+      "milestone_text": "kullanıcı adı bölümü otomatik seçili geliyor notlardaki yönergeye göre kullanıcı adı oluştur direkt yaz ve next butonuna bas eğer kullanılmış derse aynı yöntemle tekrar oluştur ve sonrakiye basarak kullanılmış mı kontrolünü yap",
+      "screen_signature": "b24a26a84ec91649",
+      "screen_summary": "Birth date and gender entry",
+      "action_kind": "click",
+      "target": "7",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "ABC",
+        "DEF",
+        "Sil",
+        "GHI"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 27,
+      "milestone_id": 6,
+      "milestone_text": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "screen_signature": "0ef490478448a713",
+      "screen_summary": "Birth date and gender entry",
+      "action_kind": "type",
+      "target": "",
+      "target_kind": "none",
+      "input_value": "1990",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "02:43",
+        "1990"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 28,
+      "milestone_id": 5,
+      "milestone_text": "hesap oluşturun butonuna tıkla ve kişisel kullanımım içini seç",
+      "screen_signature": "255900bd3e80bcb0",
+      "screen_summary": "Birth date and gender entry",
+      "action_kind": "click",
+      "target": "8",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Cinsiyet",
+        "Kadın",
+        "Erkek",
+        "Belirtmemeyi tercih ediyorum"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 29,
+      "milestone_id": 6,
+      "milestone_text": "notlardan rastgele ad soyad seç bunları gir ve next butonuna bas",
+      "screen_signature": "44f5c26e13bdf61c",
+      "screen_summary": "Birth date and gender form",
+      "action_kind": "click",
+      "target": "11",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [],
+      "is_recovery": false
+    },
+    {
+      "step_index": 30,
+      "milestone_id": 7,
+      "milestone_text": "kullanıcı adı bölümü otomatik seçili geliyor notlardaki yönergeye göre kullanıcı adı oluştur direkt yaz ve next butonuna bas eğer kullanılmış derse aynı yöntemle tekrar oluştur ve sonrakiye basarak kullanılmış mı kontrolünü yap",
+      "screen_signature": "24572e66d4bfaeb6",
+      "screen_summary": "Birth date and gender form",
+      "action_kind": "click",
+      "target": "11",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Yükleniyor"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 31,
+      "milestone_id": 7,
+      "milestone_text": "kullanıcı adı bölümü otomatik seçili geliyor notlardaki yönergeye göre kullanıcı adı oluştur direkt yaz ve next butonuna bas eğer kullanılmış derse aynı yöntemle tekrar oluştur ve sonrakiye basarak kullanılmış mı kontrolünü yap",
+      "screen_signature": "73804fb594b182ee",
+      "screen_summary": "Username creation screen for Gmail",
+      "action_kind": "type",
+      "target": "",
+      "target_kind": "none",
+      "input_value": "emreankaraa1b2",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "emreankaraa1b2"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 32,
+      "milestone_id": 7,
+      "milestone_text": "kullanıcı adı bölümü otomatik seçili geliyor notlardaki yönergeye göre kullanıcı adı oluştur direkt yaz ve next butonuna bas eğer kullanılmış derse aynı yöntemle tekrar oluştur ve sonrakiye basarak kullanılmış mı kontrolünü yap",
+      "screen_signature": "9ad6956e26290261",
+      "screen_summary": "Username creation screen with prefilled text",
+      "action_kind": "click",
+      "target": "8",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Yükleniyor"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 33,
+      "milestone_id": null,
+      "milestone_text": "",
+      "screen_signature": "28f8e22757fb25c4",
+      "screen_summary": "Password creation screen",
+      "action_kind": "type",
+      "target": "",
+      "target_kind": "none",
+      "input_value": "a1b2emre123",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "a1b2emre123"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 34,
+      "milestone_id": 7,
+      "milestone_text": "kullanıcı adı bölümü otomatik seçili geliyor notlardaki yönergeye göre kullanıcı adı oluştur direkt yaz ve next butonuna bas eğer kullanılmış derse aynı yöntemle tekrar oluştur ve sonrakiye basarak kullanılmış mı kontrolünü yap",
+      "screen_signature": "a163a4ab065e27b2",
+      "screen_summary": "Password creation screen",
+      "action_kind": "click",
+      "target": "8",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "Yükleniyor"
+      ],
+      "is_recovery": false
+    },
+    {
+      "step_index": 35,
+      "milestone_id": null,
+      "milestone_text": "",
+      "screen_signature": "318c2e3d62d2285f",
+      "screen_summary": "Hesap bilgilerinizi inceleyin",
+      "action_kind": "click",
+      "target": "11",
+      "target_kind": "index",
+      "input_value": "",
+      "is_dynamic": false,
+      "dynamic_fields": [],
+      "verification_anchors": [
+        "SOYO",
+        "DesiLive",
+        "WhatsApp"
+      ],
+      "is_recovery": false
+    }
+  ],
+  "notes": ""
+}

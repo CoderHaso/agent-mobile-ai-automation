@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -51,6 +52,7 @@ class _StepTestWorker(QThread):
     log_message = Signal(str)
     finished_ok = Signal()          # step passed
     finished_fail = Signal(str)     # step failed (reason)
+    finished_stopped = Signal(str)  # user pressed Stop (reason saved)
 
     def __init__(
         self,
@@ -59,6 +61,7 @@ class _StepTestWorker(QThread):
         instruction: str,
         task_notes: str,
         do_home_first: bool,
+        known_issues: Optional[list] = None,
     ) -> None:
         super().__init__()
         self._device = device
@@ -66,6 +69,12 @@ class _StepTestWorker(QThread):
         self._instruction = instruction
         self._task_notes = task_notes
         self._do_home_first = do_home_first
+        self._known_issues = list(known_issues or [])
+        self._executor = None
+
+    def request_stop(self) -> None:
+        if self._executor is not None:
+            self._executor.request_stop()
 
     def run(self) -> None:
         from ..planner import Plan, PlanStep
@@ -100,9 +109,10 @@ class _StepTestWorker(QThread):
                 max_iterations=15,
                 use_vision=False,
                 skip_clean_start=True,  # teach mode — don't reset between steps
+                known_issues=self._known_issues,
             )
             watchers = WatcherManager(self._device.d)
-            executor = Executor(
+            self._executor = Executor(
                 device=self._device,
                 llm=self._llm,
                 watchers=watchers,
@@ -110,14 +120,22 @@ class _StepTestWorker(QThread):
                 on_log=lambda msg: self.log_message.emit(msg),
             )
 
-            results = executor.run(plan)
+            results = self._executor.run(plan)
+            if self._executor._stop_requested:
+                self.finished_stopped.emit("Kullanıcı testi durdurdu.")
+                return
             if results and results[0].success:
                 self.finished_ok.emit()
             else:
                 note = results[0].note if results else "unknown error"
                 self.finished_fail.emit(note)
         except Exception as exc:
-            self.finished_fail.emit(str(exc))
+            if self._executor is not None and self._executor._stop_requested:
+                self.finished_stopped.emit(str(exc))
+            else:
+                self.finished_fail.emit(str(exc))
+        finally:
+            self._executor = None
 
 
 # --------------------------------------------------------------------------- #
@@ -307,6 +325,25 @@ class TeachTab(QWidget):
         btn_update_row.addWidget(self.btn_update_step)
         btn_update_row.addStretch(1)
         right_layout.addLayout(btn_update_row)
+
+        test_ctrl = QHBoxLayout()
+        test_ctrl.setSpacing(8)
+        self.btn_stop_test = QPushButton("■ Testi Durdur")
+        self.btn_stop_test.setObjectName("danger")
+        self.btn_stop_test.setEnabled(False)
+        self.btn_stop_test.clicked.connect(self._on_stop_test)
+        test_ctrl.addWidget(self.btn_stop_test)
+
+        self.btn_restart_test = QPushButton("↺ Baştan Test")
+        self.btn_restart_test.setEnabled(False)
+        self.btn_restart_test.setToolTip(
+            "Seçili adımı baştan dener (1. adımsa önce ana ekrana gider)."
+        )
+        self.btn_restart_test.clicked.connect(self._on_restart_test)
+        test_ctrl.addWidget(self.btn_restart_test)
+
+        test_ctrl.addStretch(1)
+        right_layout.addLayout(test_ctrl)
 
         # Test log
         right_layout.addWidget(QLabel("Test Log:"))
@@ -528,17 +565,92 @@ class TeachTab(QWidget):
         self._append_test_log(f"▶ Testing step {step.step_index}: {step.instruction}")
         self._render_steps()  # show "Testing…" status
 
+        known = self._collect_known_issues(row)
+        if known:
+            self._append_test_log(
+                f"📋 {len(known)} bilinen sorun AI'a iletilecek (tekrarlanmayacak)."
+            )
+
         self._test_worker = _StepTestWorker(
             device=self._device,
             llm=self._llm,
             instruction=step.instruction,
             task_notes=self.notes_input.toPlainText().strip(),
             do_home_first=(step.step_index == 1),
+            known_issues=known,
         )
+        self.btn_stop_test.setEnabled(True)
+        self.btn_restart_test.setEnabled(True)
         self._test_worker.log_message.connect(self._append_test_log)
         self._test_worker.finished_ok.connect(self._on_test_passed)
         self._test_worker.finished_fail.connect(self._on_test_failed)
+        self._test_worker.finished_stopped.connect(self._on_test_stopped)
+        self._test_worker.finished.connect(self._on_test_worker_done)
         self._test_worker.start()
+
+    def _collect_known_issues(self, step_row: int) -> list:
+        issues: list = []
+        if self._current_task is None:
+            return issues
+        issues.extend(self._current_task.known_issues or [])
+        if 0 <= step_row < len(self._current_task.steps):
+            for item in self._current_task.steps[step_row].known_issues or []:
+                if item not in issues:
+                    issues.append(item)
+        return issues
+
+    def _on_stop_test(self) -> None:
+        if self._test_worker is None or not self._test_worker.isRunning():
+            return
+        reason, ok = QInputDialog.getMultiLineText(
+            self,
+            "Testi durdur",
+            "Neden durdurdunuz? (Bu kayıt bir sonraki testte AI'a verilecek)",
+            "",
+        )
+        if ok and reason.strip():
+            self._register_known_issue(reason.strip())
+        if self._test_worker is not None:
+            self._test_worker.request_stop()
+        self._append_test_log("■ Test durdurma isteği gönderildi…")
+
+    def _on_restart_test(self) -> None:
+        """Stop any running test and re-run the selected step from a clean state."""
+        if self._test_worker is not None and self._test_worker.isRunning():
+            self._test_worker.request_stop()
+            self._test_worker.wait(3000)
+        rows = self.step_table.selectionModel().selectedRows()
+        row = rows[0].row() if rows else self._testing_row
+        if row < 0 and self._current_task and self._current_task.steps:
+            row = 0
+        if row >= 0:
+            self._on_test_step(row)
+
+    def _register_known_issue(self, reason: str) -> None:
+        if not reason or self._current_task is None:
+            return
+        if reason not in self._current_task.known_issues:
+            self._current_task.known_issues.append(reason)
+        if 0 <= self._testing_row < len(self._current_task.steps):
+            step = self._current_task.steps[self._testing_row]
+            if reason not in step.known_issues:
+                step.known_issues.append(reason)
+            step.last_result = "failed"
+            step.last_error = f"Durduruldu: {reason}"
+            step.verified = False
+        self._append_test_log(f"📝 Bilinen sorun kaydedildi: {reason}")
+        if self.name_input.text().strip():
+            self._library.save(self._current_task)
+
+    def _on_test_stopped(self, msg: str) -> None:
+        self._append_test_log(f"■ {msg}")
+        self._testing_row = -1
+        self._render_steps()
+
+    def _on_test_worker_done(self) -> None:
+        self.btn_stop_test.setEnabled(False)
+        self.btn_restart_test.setEnabled(True)
+        self._test_worker = None
 
     def _on_test_passed(self) -> None:
         if self._current_task and 0 <= self._testing_row < len(self._current_task.steps):
